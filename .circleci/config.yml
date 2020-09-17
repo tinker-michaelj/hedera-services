@@ -1039,15 +1039,20 @@ workflows:
           workflow-name: "nightly-mainnet-migration-regression"
 
   nightly-software-update-regression:
-    triggers:
-      - schedule:
-          cron: "30 18,5 * * *"
+#    triggers:
+#      - schedule:
+#          cron: "30 18,5 * * *"
+#          filters:
+#            branches:
+#              only:
+#                - 00547-D-authorized-failure
+    jobs:
+      - build-platform-and-services:
           filters:
             branches:
               only:
-                - master
-    jobs:
-      - build-platform-and-services
+                - 00547-D-authorized-failure
+          workflow-name: "Continuous integration"
       - run-software-update-regression:
           context: Slack
           requires:
