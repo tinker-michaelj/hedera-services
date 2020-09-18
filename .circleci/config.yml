@@ -1912,12 +1912,14 @@ jobs:
           command: |
             cd /swirlds-platform/regression;
             ./regression_services_circleci.sh AWS-Services-Daily-SoftwareUpdate-4N-1C.json /repo
+          no_output_timeout: 60m
 
       - run:
           name: Sync results of software update regression to AWS
           command: |
             aws s3 sync /swirlds-platform/regression/results/ s3://hedera-service-regression-jrs;
             tar -czvf /results.tar.gz  /swirlds-platform/regression/results/*
+          no_output_timeout: 60m
 
       - store_artifacts:
           path: /results.tar.gz
@@ -1955,7 +1957,6 @@ jobs:
           name: Save PEM file to keys folder
           command: |
             cp ~/.ssh/id_rsa_e7a63e343ed8fe642c7fb657450344ac /swirlds-platform/regression/keys/services-regression.pem
-
       - persist_to_workspace:
           root: /
           paths:
