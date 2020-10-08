@@ -20,8 +20,8 @@
   </organization>
 
   <scm>
-    <connection>scm:git:git@github.com:hashgraph/hedera-protobuf.git</connection>
-    <developerConnection>scm:git:git@github.com:hashgraph/hedera-protobuf.git</developerConnection>
+    <connection>scm:git:git@github.com:hashgraph/hedera-services.git</connection>
+    <developerConnection>scm:git:git@github.com:hashgraph/hedera-services.git</developerConnection>
   </scm>
   <distributionManagement>
     <snapshotRepository>
@@ -54,8 +54,6 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-    <hedera-services.version>0.8.0</hedera-services.version>
 
     <!-- Plugin property overrides -->
     <maven.compiler.source>12</maven.compiler.source>
