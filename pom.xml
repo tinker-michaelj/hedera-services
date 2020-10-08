@@ -19,6 +19,11 @@
     <url>https://hedera.com</url>
   </organization>
 
+  <scm>
+    <connection>scm:git:git@github.com:hashgraph/hedera-protobuf.git</connection>
+    <developerConnection>scm:git:git@github.com:hashgraph/hedera-protobuf.git</developerConnection>
+  </scm>
+
   <ciManagement>
     <system>CircleCI</system>
     <url>https://circleci.com/gh/hashgraph/hedera-services</url>
