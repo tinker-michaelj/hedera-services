@@ -5,7 +5,7 @@
 
   <groupId>com.hedera.services</groupId>
   <artifactId>hedera-services</artifactId>
-  <version>0.8.0</version>
+  <version>0.9.0-SNAPSHOT</version>
   <description>
     Hedera Services (crypto, file, contract, consensus) on the Platform
   </description>
@@ -221,21 +221,6 @@
 
   <dependencyManagement>
     <dependencies>
-      <dependency>
-        <groupId>com.hedera.services</groupId>
-        <artifactId>hapi-proto</artifactId>
-        <version>${hedera-services.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.hedera.services</groupId>
-        <artifactId>hapi-fees</artifactId>
-        <version>${hedera-services.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.hedera.services</groupId>
-        <artifactId>evm-adapter</artifactId>
-        <version>${hedera-services.version}</version>
-      </dependency>
       <dependency>
         <groupId>io.grpc</groupId>
         <artifactId>grpc-netty</artifactId>
