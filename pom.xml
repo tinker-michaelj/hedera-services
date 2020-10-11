@@ -109,7 +109,7 @@
         <artifactId>maven-release-plugin</artifactId>
         <version>3.0.0-M1</version>
         <configuration>
-          <releaseProfiles>release,git-signoff</releaseProfiles>
+          <releaseProfiles>release</releaseProfiles>
           <autoVersionSubmodules>true</autoVersionSubmodules>
           <tagNameFormat>v@{project.version}</tagNameFormat>
           <scmDevelopmentCommitComment>
