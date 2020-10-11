@@ -109,9 +109,15 @@
         <artifactId>maven-release-plugin</artifactId>
         <version>3.0.0-M1</version>
         <configuration>
-          <releaseProfiles>release</releaseProfiles>
+          <releaseProfiles>release,git-signoff</releaseProfiles>
           <autoVersionSubmodules>true</autoVersionSubmodules>
           <tagNameFormat>v@{project.version}</tagNameFormat>
+          <scmDevelopmentCommitComment>
+            Prepare for next dev iteration\n\n${git.signoff}
+          </scmDevelopmentCommitComment>
+          <scmReleaseCommitComment>
+            Prepare release\n\n${git.signoff}
+          </scmReleaseCommitComment>
         </configuration>
       </plugin>
       <plugin>
