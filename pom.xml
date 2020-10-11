@@ -113,13 +113,13 @@
           <autoVersionSubmodules>true</autoVersionSubmodules>
           <tagNameFormat>v@{project.version}</tagNameFormat>
           <scmDevelopmentCommitComment>
-            Prepare for next dev iteration\n\n${git.signoff}
+            Prepare for next dev iteration&#10;&#10;${git.signoff}
           </scmDevelopmentCommitComment>
           <scmReleaseCommitComment>
-            Prepare release\n\n${git.signoff}
+            Prepare release&#10;&#10;${git.signoff}
           </scmReleaseCommitComment>
           <scmBranchCommitComment>
-            Create release branch\n\n${git.signoff}
+            Create release branch&#10;&#10;${git.signoff}
           </scmBranchCommitComment>
         </configuration>
       </plugin>
