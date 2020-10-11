@@ -118,6 +118,9 @@
           <scmReleaseCommitComment>
             Prepare release\n\n${git.signoff}
           </scmReleaseCommitComment>
+          <scmBranchCommitComment>
+            Create release branch\n\n${git.signoff}
+          </scmBranchCommitComment>
         </configuration>
       </plugin>
       <plugin>
