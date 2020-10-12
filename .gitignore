@@ -21,6 +21,7 @@ hs_err_pid*
 .mvn/wrapper/maven-wrapper.jar
 
 *.sh
+!run/new-release-branch.sh
 !hapi-proto/add-copyright.sh
 !hapi-proto/gen-proto-docs.sh
 !hedera-node/data/backup/*.sh
