@@ -1,0 +1,66 @@
+# Release automation 
+
+This document covers the steps to perform a release of Hedera Services. 
+Most of the automation is built around the `maven-release-plugin` but 
+remains platform-specific due to a handful of supporting Bash scripts. 
+It has only been tested on macOS. 
+
+The target audience consists of core committers to Hedera Services. 
+Certain steps require additional privileges, such as write access to the 
+`com.hedera.hashgraph` Nexus repository or admin privileges for the 
+GitHub repository. 
+
+## Preliminaries
+
+We must prepare our _~/.m2/settings.xml_ with appropriate credentials 
+and properties.
+
+```
+<settings>
+  <servers>
+    <server>
+      <id>ossrh</id>
+      <username>[NEXUS_USERNAME]</username>
+      <password>[NEXUS_PASSWORD]</password>
+    </server>
+  </servers>
+  <profiles>
+    <profile>
+      <id>git-signoff</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <git.signoff>Signed-off-by: [GIT_USERNAME] &lt;[GIT_EMAIL]&gt;</git.signoff>
+      </properties>
+    </profile>
+    <profile>
+      <id>ossrh</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <gpg.useagent>false</gpg.useagent>
+        <gpg.passphrase>[GPG_KEY_PASSPHRASE]</gpg.passphrase>
+      </properties>
+    </profile>
+  </profiles>
+</settings>
+```
+
+## Creating a release branch
+
+This step should be performed from `master`, and hence requires
+admin privileges for the Hedera Services GitHub repository. It
+creates a branch named `release/[MAJOR_VERSION].[MINOR_VERSION]`.
+Releases candidates will be tagged from this branch.
+
+For illustration, suppose we are create the release branch for
+`v0.9` candidates. Then,
+```
+$ run/new-release-branch.sh 0 9
+```
+
+This will run `mvn release:branch -DbranchName=release/0.9` and
+then `git commit --amend --signoff` followed by `git push -f`
+to ensure the 
