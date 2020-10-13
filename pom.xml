@@ -124,18 +124,16 @@ ${git.signoff}
           <preparationGoals>
             clean 
             license:update-file-header 
-            exec:exec@gen-proto-docs 
+            exec:exec@gen-proto-docs
+            exec:exec@ensure-proto-headers
             verify
           </preparationGoals>
         </configuration>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
-        <artifactId>license-maven-plugin</artifactId>
-      </plugin>
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
+        <version>3.0.0</version>
         <executions>
           <execution>
             <id>gen-proto-docs</id>
@@ -145,11 +143,27 @@ ${git.signoff}
             <configuration>
               <executable>/bin/sh</executable>
               <commandlineArgs>
-                -c hapi-proto/gen-proto-docs.sh
+                -c 'hapi-proto/gen-proto-docs.sh'
+              </commandlineArgs>
+            </configuration>
+          </execution>
+          <execution>
+            <id>ensure-proto-headers</id>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>/bin/sh</executable>
+              <commandlineArgs>
+                -c 'hapi-proto/add-copyright.sh'
               </commandlineArgs>
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>license-maven-plugin</artifactId>
       </plugin>
       <plugin>
         <groupId>org.sonarsource.scanner.maven</groupId>
