@@ -94,7 +94,7 @@
             </configuration>
           </execution>
           <execution>
-            <id>build-docker-image</id>
+            <id>stage-changes</id>
             <configuration>
               <skip>true</skip>
             </configuration>

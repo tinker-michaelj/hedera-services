@@ -127,7 +127,7 @@ ${git.signoff}
             exec:exec@gen-proto-docs
             exec:exec@ensure-proto-headers
             verify
-            exec:exec@build-docker-image
+            exec:exec@stage-changes
           </preparationGoals>
         </configuration>
       </plugin>
@@ -137,14 +137,14 @@ ${git.signoff}
         <version>3.0.0</version>
         <executions>
           <execution>
-            <id>build-docker-image</id>
+            <id>stage-changes</id>
             <goals>
               <goal>exec</goal>
             </goals>
             <configuration>
               <executable>/bin/sh</executable>
               <commandlineArgs>
-                -c 'run/build-docker-image.sh ${project.version}'
+                -c 'git add hapi-proto/ hedera-node/src'
               </commandlineArgs>
             </configuration>
           </execution>
