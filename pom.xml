@@ -124,7 +124,7 @@ ${git.signoff}
           <preparationGoals>
             clean 
             license:update-file-header 
-            exec:exec@gen-protodocs 
+            exec:exec@gen-proto-docs 
             verify
           </preparationGoals>
         </configuration>
