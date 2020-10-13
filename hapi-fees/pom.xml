@@ -96,7 +96,10 @@
           <execution>
             <id>stage-changes</id>
             <configuration>
-              <skip>true</skip>
+              <executable>/bin/sh</executable>
+              <commandlineArgs>
+                -c 'git add src/test/java src/main/java'
+              </commandlineArgs>
             </configuration>
           </execution>
         </executions>

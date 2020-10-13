@@ -142,10 +142,7 @@ ${git.signoff}
               <goal>exec</goal>
             </goals>
             <configuration>
-              <executable>/bin/sh</executable>
-              <commandlineArgs>
-                -c 'git add hapi-fees/src/test/java hapi-fees/src/main/java test-clients/src/main/java'
-              </commandlineArgs>
+              <skip>true</skip>
             </configuration>
           </execution>
           <execution>
