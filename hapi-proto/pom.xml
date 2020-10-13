@@ -91,7 +91,10 @@
           <execution>
             <id>stage-changes</id>
             <configuration>
-              <skip>true</skip>
+              <executable>/bin/sh</executable>
+              <commandlineArgs>
+                -c 'git add src/ HAPI.html'
+              </commandlineArgs>
             </configuration>
           </execution>
         </executions>
