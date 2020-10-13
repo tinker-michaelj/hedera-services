@@ -143,7 +143,10 @@ ${git.signoff}
               <goal>exec</goal>
             </goals>
             <configuration>
-              <executable>hapi-proto/gen-proto-docs.sh</executable>
+              <executable>/bin/sh</executable>
+              <commandlineArgs>
+                -c hapi-proto/gen-proto-docs.sh
+              </commandlineArgs>
             </configuration>
           </execution>
         </executions>
