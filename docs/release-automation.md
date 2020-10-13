@@ -3,7 +3,8 @@
 This document covers the steps to perform a release of Hedera Services. 
 Most of the automation is built around the `maven-release-plugin` but 
 remains platform-specific due to a handful of supporting Bash scripts. 
-It has only been tested on macOS. 
+It has only been tested on macOS; and needs Maven version 3.5.4 or 
+later, as well as Docker. 
 
 The target audience consists of core committers to Hedera Services. 
 Certain steps require additional privileges, such as write access to the 
