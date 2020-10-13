@@ -315,15 +315,4 @@ ${git.signoff}
       </dependency>
     </dependencies>
   </dependencyManagement>
-
-  <profiles>
-      <id>release</id>
-      <build>
-        <plugins>
-          <plugin>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
 </project>
