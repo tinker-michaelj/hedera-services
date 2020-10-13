@@ -24,7 +24,7 @@
       -->
     <connection>scm:git:git@github.com:tinker-michaelj/hedera-services.git</connection>
     <developerConnection>scm:git:git@github.com:tinker-michaelj/hedera-services.git</developerConnection>
-    <tag>HEAD</tag>
+    <tag>release/0.9</tag>
   </scm>
   <distributionManagement>
     <snapshotRepository>
