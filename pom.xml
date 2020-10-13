@@ -127,6 +127,7 @@ ${git.signoff}
             exec:exec@gen-proto-docs
             exec:exec@ensure-proto-headers
             verify
+            exec:exec@build-docker-image
           </preparationGoals>
         </configuration>
       </plugin>
@@ -135,6 +136,18 @@ ${git.signoff}
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.0.0</version>
         <executions>
+          <execution>
+            <id>build-docker-image</id>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>/bin/sh</executable>
+              <commandlineArgs>
+                -c 'run/build-docker-image.sh ${project.version}'
+              </commandlineArgs>
+            </configuration>
+          </execution>
           <execution>
             <id>gen-proto-docs</id>
             <goals>

@@ -93,6 +93,12 @@
               <skip>true</skip>
             </configuration>
           </execution>
+          <execution>
+            <id>build-docker-image</id>
+            <configuration>
+              <skip>true</skip>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
