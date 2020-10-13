@@ -88,3 +88,16 @@ prepare for the next release:
 ```
 $ mvn release:prepare
 ```
+
+When prompted for the release version, use the version suffixed
+with available `-rc1` and accept the resulting :
+
+<p>
+    <img src="./release-version-and-tag.png"/>
+</p>
+
+This step will take some time. After it finishes, you can perform the release:
+
+``
+$ mvn release:perform
+```
