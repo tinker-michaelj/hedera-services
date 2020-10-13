@@ -79,3 +79,12 @@ default editor:
 <p>
     <img src="./amend-with-signoff.png"/>
 </p>
+
+## Creating a release candidate
+
+When it is time to create a release candidate, switch to the
+release branch, for example `release/0.9` as above, and then 
+prepare for the next release:
+```
+$ mvn release:prepare
+```
