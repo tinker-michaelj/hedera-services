@@ -144,7 +144,7 @@ ${git.signoff}
             <configuration>
               <executable>/bin/sh</executable>
               <commandlineArgs>
-                -c 'git add hapi-proto/ hedera-node/src'
+                -c 'git add hapi-proto/src hapi-proto/HAPI.html hedera-node/src/test/java hedera-node/src/main/java hapi-fees/src/test/java hapi-fees/src/main/java test-clients/src/main/java'
               </commandlineArgs>
             </configuration>
           </execution>
