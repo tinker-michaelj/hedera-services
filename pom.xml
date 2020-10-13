@@ -142,7 +142,10 @@ ${git.signoff}
               <goal>exec</goal>
             </goals>
             <configuration>
-              <skip>true</skip>
+              <executable>/bin/sh</executable>
+              <commandlineArgs>
+                -c 'echo "Nothing to do here."'
+              </commandlineArgs>
             </configuration>
           </execution>
           <execution>
