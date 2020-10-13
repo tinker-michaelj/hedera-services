@@ -63,4 +63,19 @@ $ run/new-release-branch.sh 0 9
 
 This will run `mvn release:branch -DbranchName=release/0.9` and
 then `git commit --amend --signoff` followed by `git push -f`
-to ensure the 
+to ensure the commit preparing the next development iteration is
+signed off. (Unfortunately `maven-release-plugin` seems to ignore
+its `scmDevelopmentCommitComment` config during `release:branch`.)
+
+The first action is to choose the next working version; for example,
+`1.0.0-SNAPSHOT`:
+<p>
+    <img src="./new-working-copy-version.png"/>
+</p>
+
+The next action is to accept the commit signoff amendment in your
+default editor:
+
+<p>
+    <img src="./amend-with-signoff.png"/>
+</p>
