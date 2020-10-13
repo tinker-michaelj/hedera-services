@@ -22,8 +22,8 @@
     <connection>scm:git:git@github.com:hashgraph/hedera-services.git</connection>
     <developerConnection>scm:git:git@github.com:hashgraph/hedera-services.git</developerConnection>
       -->
-    <connection>git@github.com:tinker-michaelj/hedera-services.git</connection>
-    <developerConnection>git@github.com:tinker-michaelj/hedera-services.git</developerConnection>
+    <connection>scm:git@github.com:tinker-michaelj/hedera-services.git</connection>
+    <developerConnection>scm:git@github.com:tinker-michaelj/hedera-services.git</developerConnection>
     <tag>HEAD</tag>
   </scm>
   <distributionManagement>
