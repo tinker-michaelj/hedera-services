@@ -121,6 +121,9 @@ ${git.signoff}
 
 ${git.signoff}
           </scmBranchCommitComment>
+          <preparationGoals>
+            clean license:update-file-header verify
+          </preparationGoals>
         </configuration>
       </plugin>
       <plugin>

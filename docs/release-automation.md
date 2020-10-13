@@ -20,8 +20,8 @@ and properties.
   <servers>
     <server>
       <id>ossrh</id>
-      <username>[NEXUS_USERNAME]</username>
-      <password>[NEXUS_PASSWORD]</password>
+      <username>[SONATYPE_OSSRH_USERNAME]</username>
+      <password>[SONATYPE_OSSRH_PASSWORD]</password>
     </server>
   </servers>
   <profiles>
@@ -31,7 +31,7 @@ and properties.
         <activeByDefault>true</activeByDefault>
       </activation>
       <properties>
-        <git.signoff>Signed-off-by: [GIT_USERNAME] &lt;[GIT_EMAIL]&gt;</git.signoff>
+        <git.signoff>Signed-off-by: [GITHUB_USERNAME] &lt;[GITHUB_EMAIL]&gt;</git.signoff>
       </properties>
     </profile>
     <profile>
@@ -40,7 +40,6 @@ and properties.
         <activeByDefault>true</activeByDefault>
       </activation>
       <properties>
-        <gpg.useagent>false</gpg.useagent>
         <gpg.passphrase>[GPG_KEY_PASSPHRASE]</gpg.passphrase>
       </properties>
     </profile>
@@ -86,6 +85,7 @@ When it is time to create a release candidate, switch to the
 release branch, for example `release/0.9` as above, and then 
 prepare for the next release:
 ```
+$ git checkout release/0.9
 $ mvn release:prepare
 ```
 
@@ -98,6 +98,13 @@ with available `-rc1` and accept the resulting :
 
 This step will take some time. After it finishes, you can perform the release:
 
-``
+```
 $ mvn release:perform
 ```
+
+There may be a number of warnings during `javadoc` execution for the _hapi-proto/_ 
+child module, but these do not require immediate attention. When the release has
+been performed successfully and you wish to release the 
+`com.hedera.hashgraph:hedera-protobuf-java-api` artifact to Maven Central, you 
+should log in to [Sonatype OSSRH](https://oss.sonatype.org/index.html#stagingRepositories)
+and release the closed staging repository. 
