@@ -16,36 +16,6 @@
 
 package com.hedera.node.app.workflows.handle.record;
 
-import static com.hedera.hapi.node.base.HederaFunctionality.CRYPTO_CREATE;
-import static com.hedera.hapi.node.base.HederaFunctionality.NODE_CREATE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS_BUT_MISSING_EXPECTED_OPERATION;
-import static com.hedera.hapi.util.HapiUtils.ACCOUNT_ID_COMPARATOR;
-import static com.hedera.hapi.util.HapiUtils.FUNDING_ACCOUNT_EXPIRY;
-import static com.hedera.hapi.util.HapiUtils.asTimestamp;
-import static com.hedera.node.app.ids.schemas.V0490EntityIdSchema.ENTITY_ID_STATE_KEY;
-import static com.hedera.node.app.ids.schemas.V0590EntityIdSchema.ENTITY_COUNTS_KEY;
-import static com.hedera.node.app.service.addressbook.impl.schemas.V053AddressBookSchema.NODES_KEY;
-import static com.hedera.node.app.service.consensus.impl.ConsensusServiceImpl.TOPICS_KEY;
-import static com.hedera.node.app.service.contract.impl.schemas.V0490ContractSchema.BYTECODE_KEY;
-import static com.hedera.node.app.service.contract.impl.schemas.V0490ContractSchema.STORAGE_KEY;
-import static com.hedera.node.app.service.file.impl.schemas.V0490FileSchema.BLOBS_KEY;
-import static com.hedera.node.app.service.file.impl.schemas.V0490FileSchema.dispatchSynthFileUpdate;
-import static com.hedera.node.app.service.file.impl.schemas.V0490FileSchema.parseConfigList;
-import static com.hedera.node.app.service.schedule.impl.schemas.V0570ScheduleSchema.SCHEDULED_COUNTS_KEY;
-import static com.hedera.node.app.service.token.impl.handlers.staking.StakingRewardsHelper.asAccountAmounts;
-import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.ACCOUNTS_KEY;
-import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.ALIASES_KEY;
-import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.NFTS_KEY;
-import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.STAKING_INFO_KEY;
-import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.TOKENS_KEY;
-import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.TOKEN_RELS_KEY;
-import static com.hedera.node.app.service.token.impl.schemas.V0530TokenSchema.AIRDROPS_KEY;
-import static com.hedera.node.app.spi.workflows.DispatchOptions.independentDispatch;
-import static com.hedera.node.app.spi.workflows.record.StreamBuilder.transactionWith;
-import static com.hedera.node.app.util.FileUtilities.createFileID;
-import static java.util.Objects.requireNonNull;
-
 import com.hedera.hapi.node.addressbook.NodeCreateTransactionBody;
 import com.hedera.hapi.node.addressbook.NodeUpdateTransactionBody;
 import com.hedera.hapi.node.base.AccountID;
@@ -55,11 +25,13 @@ import com.hedera.hapi.node.base.Key;
 import com.hedera.hapi.node.base.ResponseCodeEnum;
 import com.hedera.hapi.node.base.TransactionID;
 import com.hedera.hapi.node.base.TransferList;
+import com.hedera.hapi.node.consensus.ConsensusCreateTopicTransactionBody;
 import com.hedera.hapi.node.state.addressbook.Node;
 import com.hedera.hapi.node.state.common.EntityNumber;
 import com.hedera.hapi.node.state.entity.EntityCounts;
 import com.hedera.hapi.node.state.token.Account;
 import com.hedera.hapi.node.token.CryptoCreateTransactionBody;
+import com.hedera.hapi.node.token.TokenCreateTransactionBody;
 import com.hedera.hapi.node.transaction.ExchangeRateSet;
 import com.hedera.hapi.node.transaction.TransactionBody;
 import com.hedera.node.app.ids.EntityIdService;
@@ -92,8 +64,14 @@ import com.swirlds.platform.system.InitTrigger;
 import com.swirlds.platform.system.Platform;
 import com.swirlds.platform.system.SoftwareVersion;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
+import com.swirlds.state.merkle.MerkleStateRoot;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -105,14 +83,42 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
+import java.util.SplittableRandom;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+
+import static com.hedera.hapi.node.base.HederaFunctionality.CRYPTO_CREATE;
+import static com.hedera.hapi.node.base.HederaFunctionality.NODE_CREATE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS_BUT_MISSING_EXPECTED_OPERATION;
+import static com.hedera.hapi.node.base.TokenType.FUNGIBLE_COMMON;
+import static com.hedera.hapi.util.HapiUtils.ACCOUNT_ID_COMPARATOR;
+import static com.hedera.hapi.util.HapiUtils.FUNDING_ACCOUNT_EXPIRY;
+import static com.hedera.hapi.util.HapiUtils.asTimestamp;
+import static com.hedera.node.app.ids.schemas.V0490EntityIdSchema.ENTITY_ID_STATE_KEY;
+import static com.hedera.node.app.ids.schemas.V0590EntityIdSchema.ENTITY_COUNTS_KEY;
+import static com.hedera.node.app.service.addressbook.impl.schemas.V053AddressBookSchema.NODES_KEY;
+import static com.hedera.node.app.service.consensus.impl.ConsensusServiceImpl.TOPICS_KEY;
+import static com.hedera.node.app.service.contract.impl.schemas.V0490ContractSchema.BYTECODE_KEY;
+import static com.hedera.node.app.service.contract.impl.schemas.V0490ContractSchema.STORAGE_KEY;
+import static com.hedera.node.app.service.file.impl.schemas.V0490FileSchema.BLOBS_KEY;
+import static com.hedera.node.app.service.file.impl.schemas.V0490FileSchema.dispatchSynthFileUpdate;
+import static com.hedera.node.app.service.file.impl.schemas.V0490FileSchema.parseConfigList;
+import static com.hedera.node.app.service.schedule.impl.schemas.V0570ScheduleSchema.SCHEDULED_COUNTS_KEY;
+import static com.hedera.node.app.service.token.impl.handlers.staking.StakingRewardsHelper.asAccountAmounts;
+import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.ACCOUNTS_KEY;
+import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.ALIASES_KEY;
+import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.NFTS_KEY;
+import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.STAKING_INFO_KEY;
+import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.TOKENS_KEY;
+import static com.hedera.node.app.service.token.impl.schemas.V0490TokenSchema.TOKEN_RELS_KEY;
+import static com.hedera.node.app.service.token.impl.schemas.V0530TokenSchema.AIRDROPS_KEY;
+import static com.hedera.node.app.spi.workflows.DispatchOptions.independentDispatch;
+import static com.hedera.node.app.spi.workflows.record.StreamBuilder.transactionWith;
+import static com.hedera.node.app.util.FileUtilities.createFileID;
+import static java.util.Objects.requireNonNull;
 
 /**
  * This class is responsible for storing the system accounts created during node startup, and then creating
@@ -166,7 +172,72 @@ public class SystemSetup {
         final var systemContext = systemContextFor(dispatch);
         final var nodeStore = dispatch.handleContext().storeFactory().readableStore(ReadableNodeStore.class);
         fileService.createSystemEntities(systemContext, nodeStore);
+
+        // <PLEX>
+        setupPlexAccounts(systemContext);
+        setupPlexTokens(systemContext);
+        setupPlexTopics(systemContext);
     }
+
+    private static final long FIRST_ACCOUNT_NUM = 10000L;
+    private static final long FIRST_TOKEN_NUM = 20000L;
+    private static final long FIRST_TOPIC_NUM = 30000L;
+
+    private static final String HEXED_PUBLIC_KEY = "72d84208f4f546fffc79d31f0cbfa7352c38887efe4fe0475270e9a38f56accf";
+    private static final Key MASTER_KEY = Key.newBuilder().ed25519(Bytes.fromHex(HEXED_PUBLIC_KEY)).build();
+    private static final int NUM_ACCOUNTS = 10;
+    private static final int NUM_TOKENS = 10;
+    private static final int NUM_TOPICS = 1;
+    private static final long INITIAL_BALANCE = 10 * 100_000_000L;
+
+    private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
+
+    private void setupPlexAccounts(SystemContext systemContext) {
+        for (int i = 0 ; i < NUM_ACCOUNTS; i++) {
+            final var op = CryptoCreateTransactionBody.newBuilder()
+                    .key(MASTER_KEY)
+                    .maxAutomaticTokenAssociations(NUM_TOKENS)
+                    .initialBalance(INITIAL_BALANCE)
+                    .autoRenewPeriod(new Duration(7776000L))
+                    .build();
+            systemContext.dispatchCreation(TransactionBody.newBuilder().cryptoCreateAccount(op).build(), FIRST_ACCOUNT_NUM + i);
+        }
+    }
+
+    private void setupPlexTokens(SystemContext systemContext) {
+        final var tokenTreasuryId = AccountID.newBuilder().accountNum(FIRST_ACCOUNT_NUM).build();
+        for (int i = 0 ; i < NUM_TOKENS; i++) {
+            final var symbol = randomAlpha(3);
+            final var op = TokenCreateTransactionBody.newBuilder()
+                    .supplyKey(MASTER_KEY)
+                    .tokenType(FUNGIBLE_COMMON)
+                    .decimals(RANDOM.nextInt(10))
+                    .symbol(symbol)
+                    .name(symbol)
+                    .initialSupply(Long.MAX_VALUE)
+                    .treasury(tokenTreasuryId)
+                    .build();
+            systemContext.dispatchCreation(TransactionBody.newBuilder().tokenCreation(op).build(), FIRST_TOKEN_NUM + i);
+        }
+    }
+
+    private void setupPlexTopics(SystemContext systemContext) {
+        for (int i = 0 ; i < NUM_TOPICS; i++) {
+            final var op = ConsensusCreateTopicTransactionBody.newBuilder()
+                    .autoRenewPeriod(new Duration(7776000L))
+                    .build();
+            systemContext.dispatchCreation(TransactionBody.newBuilder().consensusCreateTopic(op).build(), FIRST_TOPIC_NUM + i);
+        }
+    }
+
+    private String randomAlpha(int n) {
+        final StringBuilder sb = new StringBuilder(n);
+        for (int i = 0; i < n; i++) {
+            sb.append("ABCDEFGHIJKLMNOPQRSTUVWXYZ".charAt(RANDOM.nextInt(26)));
+        }
+        return sb.toString();
+    }
+    // </PLEX>
 
     /**
      * Sets up post-upgrade state for the system.
@@ -384,9 +455,11 @@ public class SystemSetup {
             @Override
             public void dispatchCreation(@NonNull final TransactionBody body, final long entityNum) {
                 requireNonNull(body);
-                if (entityNum >= firstUserNum) {
+                // <PLEX>
+                if (false && entityNum >= firstUserNum) {
                     throw new IllegalArgumentException("Cannot create user entity in a system context");
                 }
+                // </PLEX>
                 final var controlledNum = dispatch.stack()
                         .getWritableStates(EntityIdService.NAME)
                         .<EntityNumber>getSingleton(ENTITY_ID_STATE_KEY);
@@ -400,6 +473,11 @@ public class SystemSetup {
                             entityNum,
                             recordBuilder.status());
                 }
+                // <PLEX>
+                if (SUCCESSES.contains(recordBuilder.status())) {
+                    log.info("Created 0.0.{} with transaction data {}", entityNum, body.data().kind());
+                }
+                // </PLEX>
                 controlledNum.put(new EntityNumber(firstUserNum - 1));
                 dispatch.stack().commitSystemStateChanges();
             }
