@@ -1760,14 +1760,19 @@ enum HederaFunctionality {
     HistoryProofVote = 106;
 
     /**
+     * Publish a random CRS to the network.
+     */
+    CrsPublication = 107;
+
+    /**
      * Update one or more storage slots in a lambda.
      */
-    LambdaSStore = 107;
+    LambdaSStore = 108;
 
     /**
      * (Internal-only) Dispatch a lambda action.
      */
-    LambdaDispatch = 108;
+    LambdaDispatch = 109;
 }
 
 /**

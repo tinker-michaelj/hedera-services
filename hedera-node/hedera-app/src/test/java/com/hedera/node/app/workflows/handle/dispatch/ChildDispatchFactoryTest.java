@@ -18,12 +18,13 @@ package com.hedera.node.app.workflows.handle.dispatch;
 
 import static com.hedera.hapi.node.base.HederaFunctionality.CONTRACT_CALL;
 import static com.hedera.node.app.fixtures.AppTestBase.DEFAULT_CONFIG;
+import static com.hedera.node.app.spi.fees.NoopFeeCharging.NOOP_FEE_CHARGING;
 import static java.util.Collections.emptySet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mock.Strictness.LENIENT;
 import static org.mockito.Mockito.verify;
@@ -46,10 +47,12 @@ import com.hedera.node.app.spi.records.BlockRecordInfo;
 import com.hedera.node.app.spi.signatures.VerificationAssistant;
 import com.hedera.node.app.spi.throttle.ThrottleAdviser;
 import com.hedera.node.app.spi.workflows.DispatchOptions;
+import com.hedera.node.app.spi.workflows.DispatchOptions.PropagateFeeChargingStrategy;
 import com.hedera.node.app.spi.workflows.HandleContext;
 import com.hedera.node.app.spi.workflows.record.StreamBuilder;
 import com.hedera.node.app.store.ReadableStoreFactory;
 import com.hedera.node.app.version.ServicesSoftwareVersion;
+import com.hedera.node.app.workflows.TransactionChecker;
 import com.hedera.node.app.workflows.dispatcher.TransactionDispatcher;
 import com.hedera.node.app.workflows.handle.Dispatch;
 import com.hedera.node.app.workflows.handle.DispatchProcessor;
@@ -132,6 +135,9 @@ class ChildDispatchFactoryTest {
     @Mock
     private ExchangeRateManager exchangeRateManager;
 
+    @Mock
+    private TransactionChecker transactionChecker;
+
     private ChildDispatchFactory subject;
 
     private static final AccountID payerId =
@@ -150,6 +156,7 @@ class ChildDispatchFactoryTest {
                 dispatchProcessor,
                 serviceScopeLookup,
                 exchangeRateManager,
+                transactionChecker,
                 ServicesSoftwareVersion::new);
     }
 
@@ -160,7 +167,7 @@ class ChildDispatchFactoryTest {
         assertThat(noOpKeyVerifier.verificationFor(Key.DEFAULT, assistant).passed())
                 .isTrue();
         assertThat(noOpKeyVerifier.verificationFor(Bytes.EMPTY).passed()).isTrue();
-        assertThat(noOpKeyVerifier.numSignaturesVerified()).isEqualTo(0L);
+        assertThat(noOpKeyVerifier.numSignaturesVerified()).isZero();
     }
 
     @Test
@@ -177,7 +184,7 @@ class ChildDispatchFactoryTest {
         assertThat(derivedVerifier.verificationFor(Key.DEFAULT, (k, v) -> false).passed())
                 .isTrue();
         assertThat(derivedVerifier.verificationFor(Bytes.EMPTY).passed()).isTrue();
-        assertThat(derivedVerifier.numSignaturesVerified()).isEqualTo(0L);
+        assertThat(derivedVerifier.numSignaturesVerified()).isZero();
         assertThat(derivedVerifier.authorizingSimpleKeys()).containsExactly(A_CONTRACT_ID_KEY);
     }
 
@@ -253,8 +260,10 @@ class ChildDispatchFactoryTest {
                                 emptySet(),
                                 StreamBuilder.class,
                                 DispatchOptions.StakingRewards.ON,
-                                DispatchOptions.UsePresetTxnId.NO)));
-        assertTrue(exception.getCause() instanceof UnknownHederaFunctionality);
+                                DispatchOptions.UsePresetTxnId.NO,
+                                NOOP_FEE_CHARGING,
+                                PropagateFeeChargingStrategy.YES)));
+        assertInstanceOf(UnknownHederaFunctionality.class, exception.getCause());
         assertEquals("Unknown Hedera Functionality", exception.getMessage());
     }
 

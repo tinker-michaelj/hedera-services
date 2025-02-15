@@ -68,4 +68,10 @@ public @interface Contract {
      * look for bytecode and initcode resources.
      */
     boolean implementsLambda() default false;
+
+    /**
+     * If set, specifies the variant version of a system contract.  This affects the location to search in the
+     * resources directory for the contract.
+     */
+    String variant() default "";
 }

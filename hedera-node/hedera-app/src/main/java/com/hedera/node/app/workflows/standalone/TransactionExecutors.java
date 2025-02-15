@@ -25,8 +25,9 @@ import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.node.app.Hedera;
 import com.hedera.node.app.config.BootstrapConfigProviderImpl;
 import com.hedera.node.app.config.ConfigProviderImpl;
-import com.hedera.node.app.hints.impl.FakeHintsLibrary;
+import com.hedera.node.app.hints.impl.HintsLibraryImpl;
 import com.hedera.node.app.hints.impl.HintsServiceImpl;
+import com.hedera.node.app.ids.AppEntityIdFactory;
 import com.hedera.node.app.info.NodeInfoImpl;
 import com.hedera.node.app.service.contract.impl.ContractServiceImpl;
 import com.hedera.node.app.service.file.impl.FileServiceImpl;
@@ -238,8 +239,8 @@ public enum TransactionExecutors {
         final var tracerBinding =
                 customTracerBinding != null ? customTracerBinding : DefaultTracerBinding.DEFAULT_TRACER_BINDING;
         final var executor = newExecutorComponent(state, properties, tracerBinding, customOps, softwareVersionFactory);
-        executor.initializer().accept(state);
         executor.stateNetworkInfo().initFrom(state);
+        executor.initializer().accept(state);
         final var exchangeRateManager = executor.exchangeRateManager();
         return (transactionBody, consensusNow, operationTracers) -> {
             final var dispatch = executor.standaloneDispatchFactory().newDispatch(state, transactionBody, consensusNow);
@@ -277,17 +278,21 @@ public enum TransactionExecutors {
                         () -> state,
                         () -> componentRef.get().throttleServiceManager().activeThrottleDefinitionsOrThrow(),
                         ThrottleAccumulator::new,
-                        softwareVersionFactory));
+                        softwareVersionFactory),
+                () -> componentRef.get().appFeeCharging(),
+                new AppEntityIdFactory(bootstrapConfig));
         final var contractService = new ContractServiceImpl(
                 appContext, NO_OP_METRICS, NOOP_VERIFICATION_STRATEGIES, tracerBinding, customOps);
         final var fileService = new FileServiceImpl();
-        final var scheduleService = new ScheduleServiceImpl();
+        final var scheduleService = new ScheduleServiceImpl(appContext);
         final var hintsService = new HintsServiceImpl(
-                NO_OP_METRICS, ForkJoinPool.commonPool(), appContext, new FakeHintsLibrary(), bootstrapConfig);
+                NO_OP_METRICS, ForkJoinPool.commonPool(), appContext, new HintsLibraryImpl(), bootstrapConfig);
         final var component = DaggerExecutorComponent.builder()
+                .appContext(appContext)
                 .configProviderImpl(configProvider)
                 .bootstrapConfigProviderImpl(bootstrapConfigProvider)
                 .fileServiceImpl(fileService)
+                .scheduleService(scheduleService)
                 .contractServiceImpl(contractService)
                 .scheduleServiceImpl(scheduleService)
                 .hintsService(hintsService)

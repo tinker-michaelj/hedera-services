@@ -107,6 +107,7 @@ import "event/state_signature_transaction.proto";
 import "auxiliary/hints/hints_key_publication.proto";
 import "auxiliary/hints/hints_preprocessing_vote.proto";
 import "auxiliary/hints/hints_partial_signature.proto";
+import "auxiliary/hints/crs_publication.proto";
 
 import "auxiliary/history/history_proof_signature.proto";
 import "auxiliary/history/history_proof_key_publication.proto";
@@ -652,14 +653,19 @@ message TransactionBody {
         com.hedera.hapi.services.auxiliary.history.HistoryProofVoteTransactionBody history_proof_vote = 71;
 
         /**
+         * A transaction body for broadcasting a node's crs publication
+         */
+        com.hedera.hapi.services.auxiliary.hints.CrsPublicationTransactionBody crs_publication = 72;
+
+        /**
          * A transaction body for updating the storage of a lambda.
          */
-        LambdaSStoreTransactionBody lambda_sstore = 72;
+        LambdaSStoreTransactionBody lambda_sstore = 73;
 
         /**
          * An internal-only transaction body for dispatching a lambda creation, deletion, or execution.
          */
-        LambdaDispatchTransactionBody lambda_dispatch = 73;
+        LambdaDispatchTransactionBody lambda_dispatch = 74;
     }
 
     /**
