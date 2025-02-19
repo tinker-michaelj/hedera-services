@@ -23,9 +23,9 @@ its custom logic.
 A lambda does not have a `ContractID` or EVM address. It cannot be called via the Hedera API (HAPI), and it cannot hold
 HBAR or Hedera Token Service (HTS) assets. It does, however, reuse bytecode from an already deployed smart contract;
 we call a contract deployed for use by lambdas a **hook contract**, and a function signature on a hook contract
-that is called by lambdas, a **hook**. Hooks are called with `DELEGATECALL` at the top level so the shared bytecode
-sees the storage of the currently executing lambda; and hook ABIs always include the address of the entity that owns
-the executing lambda as an explicit function argument.
+that is called by lambdas, a **hook**. Hooks are called with `DELEGATECALL` so the hook contract's bytecode "sees"
+the storage of the currently executing lambda. Hook ABIs always include the address of the entity that owns the
+executing lambda as an explicit function argument.
 
 The **type** of a lambda determines where it can be installed, which transactions can reference it, and exactly how the
 protocol applies its logic. For example, an allowance lambda can be installed on an account, referenced by a
@@ -436,6 +436,28 @@ message LambdaState {
 }
 ```
 
+And its storage is keyed by the following type,
+
+```protobuf
+/**
+ * The key of a lambda's storage slot.
+ *
+ * For each lambda, its EVM storage is a mapping of 256-bit keys (or "words")
+ * to 256-bit values.
+ */
+message LambdaSlotKey {
+   /**
+    * The id of the lambda that owns this slot.
+    */
+   proto.LambdaID lambda_id = 1;
+
+   /**
+    * The EVM key of this slot, left-padded with zeros to form a 256-bit word.
+    */
+   bytes key = 2;
+}
+```
+
 ### Allowance lambda HAPI protobufs
 
 The transfer allowance lambda type is the first and only lambda type in this proposal. It is installed on an account
@@ -583,11 +605,14 @@ the below Solidity contract.
 import "./IHieroTransferAllowance.sol";
 
 contract OneTimeCodeTransferAllowance is IHieroTransferAllowance {
-    /// The hash of a one-time use passcode string
+    /// The hash of a one-time use passcode string, at storage slot 0x00
     bytes32 passcodeHash;
 
     /// Allow the proposed transfers if and only if the args are the
     /// ABI encoding of the current one-time use passcode in storage.
+    ///
+    /// NOTE: this hook's behavior does not depend on the installer address,
+    /// only the contents of the installed lambda's 0x00 storage slot
     function allow(
         address installer,
         IHieroTransferAllowance.ProposedTransfers memory,
