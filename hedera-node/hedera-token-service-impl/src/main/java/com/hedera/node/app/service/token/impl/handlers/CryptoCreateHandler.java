@@ -301,10 +301,8 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
             }
         }
 
-        long lastIndex = 0L;
-        long defaultIndex = 1L;
         for (final var installation : op.lambdaInstallations()) {
-            final long index = installation.hasIndex() ? installation.indexOrThrow() : defaultIndex++;
+            final long index = installation.index();
             final LambdaID lambdaId = LambdaID.newBuilder()
                     .ownerId(LambdaOwnerID.newBuilder()
                             .accountId(createdAccountID)
@@ -313,13 +311,12 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
                     .build();
             final var body = TransactionBody.newBuilder()
                     .lambdaDispatch(LambdaDispatchTransactionBody.newBuilder()
-                            .creation(new LambdaCreation(lambdaId, installation, lastIndex))
+                            .creation(new LambdaCreation(lambdaId, installation, index))
                             .build())
                     .build();
             final var dispatchBuilder = context.dispatch(DispatchOptions.stepDispatch(
                     context.payer(), body, StreamBuilder.class, NOOP_TRANSACTION_CUSTOMIZER));
             validateSuccess(dispatchBuilder.status());
-            lastIndex = index;
         }
     }
 

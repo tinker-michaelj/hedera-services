@@ -266,7 +266,8 @@ public class SpecContract extends AbstractSpecEntity<SpecOperation, Account>
     @Override
     protected Creation<SpecOperation, Account> newCreation(@NonNull final HapiSpec spec) {
         final var model = builder.build();
-        final var initcode = lambda ? fromPbj(lambdaInitcodeFromResources(contractName)) : getInitcodeOf(contractName, variant);
+        final var initcode =
+                lambda ? fromPbj(lambdaInitcodeFromResources(contractName)) : getInitcodeOf(contractName, variant);
         final SpecOperation op;
         constructorArgs = withSubstitutedTypes(spec.targetNetworkOrThrow(), constructorArgs);
         if (initcode.size() < MAX_INLINE_INITCODE_SIZE) {

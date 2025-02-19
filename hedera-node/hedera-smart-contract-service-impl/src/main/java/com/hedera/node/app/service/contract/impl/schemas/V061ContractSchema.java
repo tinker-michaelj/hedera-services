@@ -31,6 +31,7 @@ public class V061ContractSchema extends Schema {
             SemanticVersion.newBuilder().major(0).minor(61).build();
 
     public static final String LAMBDA_STATES_KEY = "LAMBDA_STATES";
+    public static final String LAMBDA_STORAGE_KEY = "LAMBDA_STORAGE";
 
     public V061ContractSchema() {
         super(VERSION);

@@ -41,51 +41,72 @@ import "google/protobuf/wrappers.proto";
  */
 message LambdaState {
   /**
-   * The internal-only contract id of the lambda, used to reference its bytecode and storage
-   * without defining duplicate lambda-scoped state keys for lambda bytecode and storage.
-   * This id <b>cannot</b> be used to call the lambda via HAPI.
+   * For state proof legibility, the id of this lambda.
    */
-  proto.ContractID contract_id = 1;
+  proto.LambdaID lambda_id = 1;
+
+  /**
+   * The id of the hook contract with this lambda's bytecode.
+   */
+  proto.ContractID hook_contract_id = 2;
 
   /**
    * The type of the lambda.
    */
-  proto.LambdaType type = 2;
+  proto.LambdaType type = 3;
 
   /**
    * The charging pattern of the lambda.
    */
-  proto.LambdaChargingPattern charging_pattern = 3;
+  proto.LambdaChargingPattern charging_pattern = 4;
 
   /**
    * If set, the default gas limit to use when executing the lambda.
    */
-  google.protobuf.UInt64Value default_gas_limit = 4;
+  google.protobuf.UInt64Value default_gas_limit = 5;
 
   /**
    * True if the lambda has been uninstalled.
    */
-  bool deleted = 5;
+  bool deleted = 6;
 
   /**
    * The lambda's first contract storage key.
    */
-  bytes first_contract_storage_key = 6;
+  bytes first_contract_storage_key = 7;
 
   /**
    * If non-zero, the index of the lambda preceding this one in the owner's
    * doubly-linked list of lambdas.
    */
-  uint64 previous_index = 7;
+  uint64 previous_index = 8;
 
   /**
    * If non-zero, the index of the lambda following this one in the owner's
    * doubly-linked list of lambdas.
    */
-  uint64 next_index = 8;
+  uint64 next_index = 9;
 
   /**
    * The number of storage slots the lambda is using.
    */
-  uint32 num_storage_slots = 9;
+  uint32 num_storage_slots = 10;
+}
+
+/**
+ * The key of a lambda's storage slot.
+ *
+ * For each lambda, its EVM storage is a mapping of 256-bit keys (or "words")
+ * to 256-bit values.
+ */
+message LambdaSlotKey {
+  /**
+   * The id of the lambda that owns this slot.
+   */
+  proto.LambdaID lambda_id = 1;
+
+  /**
+   * The EVM key of this slot, left-padded with zeros to form a 256-bit word.
+   */
+  bytes key = 2;
 }

@@ -23,8 +23,8 @@ import static java.util.Objects.requireNonNull;
 
 import com.hedera.hapi.node.base.ContractID;
 import com.hedera.hapi.node.base.LambdaID;
-import com.hedera.hapi.node.state.contract.SlotKey;
 import com.hedera.hapi.node.state.contract.SlotValue;
+import com.hedera.hapi.node.state.lambda.LambdaSlotKey;
 import com.hedera.hapi.node.state.lambda.LambdaState;
 import com.hedera.node.app.spi.workflows.HandleException;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
@@ -39,7 +39,7 @@ import java.util.List;
  * Read-only access to lambda states.
  */
 public class ReadableLambdaStore {
-    private final ReadableKVState<SlotKey, SlotValue> storage;
+    private final ReadableKVState<LambdaSlotKey, SlotValue> storage;
     private final ReadableKVState<LambdaID, LambdaState> lambdaStates;
 
     public ReadableLambdaStore(@NonNull final ReadableStates states) {
@@ -50,7 +50,7 @@ public class ReadableLambdaStore {
 
     public record LambdaView(@NonNull LambdaState state, @NonNull List<Slot> selectedSlots) {
         public ContractID contractId() {
-            return state.contractIdOrThrow();
+            return state.hookContractIdOrThrow();
         }
 
         public Bytes firstStorageKey() {
@@ -58,7 +58,7 @@ public class ReadableLambdaStore {
         }
     }
 
-    public record Slot(@NonNull SlotKey key, @Nullable SlotValue value) {
+    public record Slot(@NonNull LambdaSlotKey key, @Nullable SlotValue value) {
         @Nullable
         public Bytes maybeBytesValue() {
             return (value == null || Bytes.EMPTY.equals(value.value())) ? null : value.value();
@@ -98,10 +98,9 @@ public class ReadableLambdaStore {
         if (state == null) {
             throw new HandleException(INVALID_LAMBDA_ID);
         }
-        final var contractId = state.contractIdOrThrow();
         final List<Slot> slots = new ArrayList<>(keys.size());
         keys.forEach(key -> {
-            final var slotKey = new SlotKey(contractId, zeroPaddedTo32(key));
+            final var slotKey = new LambdaSlotKey(lambdaId, zeroPaddedTo32(key));
             final var slotValue = storage.get(slotKey);
             slots.add(new Slot(slotKey, slotValue));
         });

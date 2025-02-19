@@ -16,6 +16,8 @@
 
 package com.hedera.node.app.service.contract.impl.handlers;
 
+import static java.util.Objects.requireNonNull;
+
 import com.hedera.node.app.service.contract.impl.state.WritableLambdaStore;
 import com.hedera.node.app.spi.workflows.HandleContext;
 import com.hedera.node.app.spi.workflows.HandleException;
@@ -25,11 +27,8 @@ import com.hedera.node.app.spi.workflows.PureChecksContext;
 import com.hedera.node.app.spi.workflows.TransactionHandler;
 import com.hedera.node.config.data.HederaConfig;
 import edu.umd.cs.findbugs.annotations.NonNull;
-
 import javax.inject.Inject;
 import javax.inject.Singleton;
-
-import static java.util.Objects.requireNonNull;
 
 @Singleton
 public class LambdaDispatchHandler implements TransactionHandler {

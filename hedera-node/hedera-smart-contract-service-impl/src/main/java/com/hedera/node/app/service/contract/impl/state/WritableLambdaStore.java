@@ -17,13 +17,12 @@
 package com.hedera.node.app.service.contract.impl.state;
 
 import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_LAMBDA_ID;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_LAMBDA_INDEX;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.LAMBDA_INDEX_IN_USE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.LAMBDA_INSTALLATION_MISSING_INIT_METHOD;
 import static com.hedera.node.app.hapi.utils.EntityType.LAMBDA;
 import static com.hedera.node.app.service.contract.impl.infra.IterableStorageManager.insertAccessedValue;
 import static com.hedera.node.app.service.contract.impl.infra.IterableStorageManager.removeAccessedValue;
 import static com.hedera.node.app.service.contract.impl.schemas.V061ContractSchema.LAMBDA_STATES_KEY;
+import static com.hedera.node.app.service.contract.impl.schemas.V061ContractSchema.LAMBDA_STORAGE_KEY;
 import static com.hedera.node.app.service.contract.impl.state.StorageAccess.StorageAccessType.INSERTION;
 import static com.hedera.node.app.service.contract.impl.state.StorageAccess.StorageAccessType.REMOVAL;
 import static com.hedera.node.app.service.contract.impl.state.StorageAccess.StorageAccessType.UPDATE;
@@ -31,12 +30,11 @@ import static com.hedera.node.app.service.contract.impl.state.StorageAccess.Stor
 import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
 import static java.util.Objects.requireNonNull;
 
-import com.hedera.hapi.node.base.ContractID;
 import com.hedera.hapi.node.base.LambdaID;
 import com.hedera.hapi.node.lambda.LambdaInstallation;
 import com.hedera.hapi.node.lambda.LambdaStorageSlot;
-import com.hedera.hapi.node.state.contract.Bytecode;
 import com.hedera.hapi.node.state.contract.SlotValue;
+import com.hedera.hapi.node.state.lambda.LambdaSlotKey;
 import com.hedera.hapi.node.state.lambda.LambdaState;
 import com.hedera.node.app.service.contract.impl.state.StorageAccess.StorageAccessType;
 import com.hedera.node.app.spi.ids.WritableEntityCounters;
@@ -58,6 +56,7 @@ public class WritableLambdaStore extends ReadableLambdaStore {
     private final ContractStateStore stateStore;
     private final WritableEntityCounters entityCounters;
     private final WritableKVState<LambdaID, LambdaState> lambdaStates;
+    private final WritableKVState<LambdaSlotKey, SlotValue> storage;
 
     public WritableLambdaStore(
             @NonNull final WritableStates states, @NonNull final WritableEntityCounters entityCounters) {
@@ -65,6 +64,7 @@ public class WritableLambdaStore extends ReadableLambdaStore {
         this.stateStore = new WritableContractStateStore(states, entityCounters);
         this.entityCounters = requireNonNull(entityCounters);
         this.lambdaStates = states.get(LAMBDA_STATES_KEY);
+        this.storage = states.get(LAMBDA_STORAGE_KEY);
     }
 
     /**
@@ -100,7 +100,7 @@ public class WritableLambdaStore extends ReadableLambdaStore {
                 case UPDATE -> {
                     final var slotValue =
                             new SlotValue(update.newValueOrThrow(), slot.effectivePrevKey(), slot.effectiveNextKey());
-                    stateStore.putSlot(slot.key(), slotValue);
+                    storage.put(slot.key(), slotValue);
                     yield firstKey;
                 }
                 default -> firstKey;};
@@ -139,7 +139,7 @@ public class WritableLambdaStore extends ReadableLambdaStore {
      * @throws HandleException if the installation is invalid
      */
     public void installLambda(
-            final long nextLambdaIndex,
+            final long nextIndex,
             @NonNull final LambdaID lambdaId,
             @NonNull final LongSupplier contractNumSupplier,
             @NonNull final HederaConfig hederaConfig,
@@ -147,43 +147,16 @@ public class WritableLambdaStore extends ReadableLambdaStore {
             throws HandleException {
         validateTrue(lambdaStates.get(lambdaId) == null, LAMBDA_INDEX_IN_USE);
         final var builder = LambdaState.newBuilder();
-        if (nextLambdaIndex != 0L) {
-            final var nextLambdaId =
-                    lambdaId.copyBuilder().index(nextLambdaIndex).build();
-            var nextLambda = lambdaStates.get(nextLambdaId);
-            validateTrue(nextLambda != null, INVALID_LAMBDA_INDEX);
-            nextLambda =
-                    nextLambda.copyBuilder().previousIndex(lambdaId.index()).build();
-            lambdaStates.put(nextLambdaId, nextLambda);
-        }
-        final var contractId = ContractID.newBuilder()
-                .shardNum(hederaConfig.shard())
-                .realmNum(hederaConfig.realm())
-                .contractNum(contractNumSupplier.getAsLong())
-                .build();
-        final var state = builder.contractId(contractId)
+        final var state = builder.lambdaId(lambdaId)
+                .hookContractId(installation.hookContractIdOrThrow())
                 .type(installation.type())
                 .chargingPattern(installation.chargingPattern())
                 .defaultGasLimit(installation.defaultGasLimit())
-                .nextIndex(nextLambdaIndex)
+                .nextIndex(nextIndex)
                 .build();
         lambdaStates.put(lambdaId, state);
-        switch (installation.initMethod().kind()) {
-            case UNSET -> throw new HandleException(LAMBDA_INSTALLATION_MISSING_INIT_METHOD);
-            case INITCODE -> throw new AssertionError("Not implemented");
-            case EXPLICIT_INIT -> {
-                final var explicitInit = installation.explicitInitOrThrow();
-                final var raw =
-                        switch (explicitInit.bytecodeSource().kind()) {
-                            case UNSET -> throw new HandleException(LAMBDA_INSTALLATION_MISSING_INIT_METHOD);
-                            case BYTECODE_FILE_ID -> throw new AssertionError("Not implemented");
-                            case BYTECODE -> explicitInit.bytecodeOrThrow();
-                        };
-                stateStore.putBytecode(contractId, new Bytecode(raw));
-                if (!explicitInit.storageSlots().isEmpty()) {
-                    updateSlots(lambdaId, explicitInit.storageSlots());
-                }
-            }
+        if (!installation.initialStorageSlots().isEmpty()) {
+            updateSlots(lambdaId, installation.initialStorageSlots());
         }
         entityCounters.incrementEntityTypeCount(LAMBDA);
     }

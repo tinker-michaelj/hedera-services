@@ -347,7 +347,7 @@ public class HevmTransactionFactory {
 
     private record DispatchDetails(@NonNull LambdaState lambdaState, @NonNull LambdaCall call, long gasLimit) {
         public ContractID contractId() {
-            return lambdaState.contractIdOrThrow();
+            return lambdaState.hookContractIdOrThrow();
         }
 
         public Bytes callData() {

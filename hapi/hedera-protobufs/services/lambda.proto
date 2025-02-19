@@ -58,58 +58,6 @@ enum LambdaChargingPattern {
 }
 
 /**
- * Specifies the initcode for a lambda that wants to initialize its
- * bytecode via a EVM contract creation transaction.
- */
-message LambdaInitcode {
-  oneof source {
-    /**
-     * The ID of the file that contains the lambda's initcode.
-     */
-    FileID file_id = 1;
-
-    /**
-     * The lambda's initcode, inline.
-     */
-    bytes code = 2;
-  }
-
-  /**
-   * The parameters to pass to the lambda's constructor.
-   */
-  bytes constructor_parameters = 3;
-
-  /**
-   * The gas limit to use when executing the lambda's initcode.
-   */
-  uint64 gas_limit = 4;
-}
-
-/**
- * Specifies the bytecode and initial storage slots for a lambda
- * that wants to initialize itself explicitly.
- */
-message LambdaExplicitInit {
-  oneof bytecode_source {
-    /**
-     * The ID of a file that contains the lambda's
-     * pre-initialized bytecode.
-     */
-    FileID bytecode_file_id = 3;
-
-    /**
-     * The lambda's bytecode, inline.
-     */
-    bytes bytecode = 4;
-  }
-
-  /**
-   * The initial storage of the lambda.
-   */
-  repeated LambdaStorageSlot storage_slots = 5;
-}
-
-/**
  * A slot in the storage of a lambda.
  */
 message LambdaStorageSlot {
@@ -133,47 +81,38 @@ message LambdaInstallation {
    */
   LambdaType type = 1;
 
-  oneof init_method {
-    /**
-     * If the lambda should be initialized via a EVM contract
-     * creation transaction, the initcode to execute.
-     */
-    LambdaInitcode initcode = 2;
-
-    /**
-     * If the lambda should be initialized explicitly, the
-     * bytecode and initial storage slots to use.
-     */
-    LambdaExplicitInit explicit_init = 3;
-
-    /**
-     * A "hook" contract to reuse bytecode from; will be delegate called
-     * using the lambda's storage instead of its own.
-     * <p>
-     * For lambda types such as TRANSFER_ALLOWANCE, the hook ABI is extended
-     * to include the address of the installing account on whose behalf the
-     * contract is currently being executed.
-     * <p>
-     * As a best practice, hook contracts used should revert if their address
-     * is not the lambda system contract address 0x16c.
-     */
-    ContractID hook_contract_id = 4;
-  }
+  /**
+   * The "hook" contract to reuse bytecode from; is delegate called using
+   * the lambda's storage instead of its own.
+   * <p>
+   * Lambda entrypoint ABIs always include the address of the installing
+   * account on whose behalf a lambda is executing. So a hook contract can
+   * customize its behavior based on both the installing account, and the
+   * storage of that account's lambda.
+   * <p>
+   * As a best practice, hook contracts should revert if their EVM address
+   * is not the lambda system contract address 0x16d.
+   */
+  ContractID hook_contract_id = 2;
 
   /**
    * The charging pattern to apply for gas usage.
    */
-  LambdaChargingPattern charging_pattern = 5;
+  LambdaChargingPattern charging_pattern = 3;
 
   /**
    * If present, the default gas limit to use when
    * executing the lambda.
    */
-  google.protobuf.UInt64Value default_gas_limit = 6;
+  google.protobuf.UInt64Value default_gas_limit = 4;
 
   /**
-   * If present, a specific lambda index to attempt
-   * to install this lambda at.
+   * The index to install the lambda at.
    */
-  google.protobuf.UInt64Value index = 7;
+  uint64 index = 5;
+
+  /**
+   * The initial storage of the lambda.
+   */
+  repeated LambdaStorageSlot initial_storage_slots = 6;
 }
