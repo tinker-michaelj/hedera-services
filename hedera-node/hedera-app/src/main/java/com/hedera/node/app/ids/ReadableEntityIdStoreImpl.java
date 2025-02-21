@@ -120,7 +120,7 @@ public class ReadableEntityIdStoreImpl implements ReadableEntityIdStore {
             case SCHEDULE -> entityState.numSchedules();
             case AIRDROP -> entityState.numAirdrops();
             case STAKING_INFO -> entityState.numStakingInfos();
-            case LAMBDA -> entityState.numLambdas();
+            case HOOK -> entityState.numHooks();
         };
     }
 

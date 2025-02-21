@@ -18,5 +18,5 @@ public enum EntityType {
     CONTRACT_BYTECODE,
     CONTRACT_STORAGE,
     STAKING_INFO,
-    LAMBDA,
+    HOOK,
 }

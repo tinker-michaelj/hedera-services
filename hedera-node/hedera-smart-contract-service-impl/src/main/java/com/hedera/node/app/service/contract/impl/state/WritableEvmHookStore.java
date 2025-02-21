@@ -3,7 +3,7 @@ package com.hedera.node.app.service.contract.impl.state;
 
 import static com.hedera.hapi.node.base.ResponseCodeEnum.HOOK_INDEX_IN_USE;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.HOOK_NOT_FOUND;
-import static com.hedera.node.app.hapi.utils.EntityType.LAMBDA;
+import static com.hedera.node.app.hapi.utils.EntityType.HOOK;
 import static com.hedera.node.app.service.contract.impl.infra.IterableStorageManager.insertAccessedValue;
 import static com.hedera.node.app.service.contract.impl.infra.IterableStorageManager.removeAccessedValue;
 import static com.hedera.node.app.service.contract.impl.schemas.V061ContractSchema.EVM_HOOK_STATES_KEY;
@@ -155,7 +155,7 @@ public class WritableEvmHookStore extends ReadableEvmHookStore {
                 updateSlots(hookId, initialStorageSlots);
             }
         }
-        entityCounters.incrementEntityTypeCount(LAMBDA);
+        entityCounters.incrementEntityTypeCount(HOOK);
     }
 
     private record SlotUpdate(@NonNull Bytes key, @Nullable Bytes oldValue, @Nullable Bytes newValue) {

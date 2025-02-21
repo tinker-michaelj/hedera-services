@@ -82,7 +82,7 @@ public class WritableEntityIdStore extends ReadableEntityIdStoreImpl implements 
             case AIRDROP -> newEntityCounts.numAirdrops(entityCounts.numAirdrops() + delta);
             case NODE -> newEntityCounts.numNodes(entityCounts.numNodes() + delta);
             case STAKING_INFO -> newEntityCounts.numStakingInfos(entityCounts.numStakingInfos() + delta);
-            case LAMBDA -> newEntityCounts.numLambdas(entityCounts.numLambdas() + delta);
+            case HOOK -> newEntityCounts.numHooks(entityCounts.numHooks() + delta);
         }
         entityCountsState.put(newEntityCounts.build());
     }
