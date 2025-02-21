@@ -59,7 +59,9 @@ architecture or undertake the slow, complex process of designing, drafting, and 
 
 We believe lambdas fill this gap by providing carefully chosen extension points within the native protocol. With
 lambdas, the use cases motivating HIP-18, HIP-904, and HIP-991 (and many other past and future enhancements) could be
-realized at the protocol layer with less complexity and a broader feature set. By avoiding new protocol-level
+realized at the protocol layer with less complexity and a broader feature set.
+
+By avoiding new protocol-level
 changes for every customization, lambdas can greatly streamline innovation while maintaining the performance and
 integrity of Hedera’s native services.
 
