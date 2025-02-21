@@ -10,8 +10,8 @@ import com.hedera.pbj.runtime.io.buffer.Bytes;
 import com.hedera.services.bdd.spec.HapiSpec;
 import com.hedera.services.bdd.spec.transactions.HapiTxnOp;
 import com.hederahashgraph.api.proto.java.HederaFunctionality;
-import com.hederahashgraph.api.proto.java.HookLambdaStorageSlot;
 import com.hederahashgraph.api.proto.java.LambdaSStoreTransactionBody;
+import com.hederahashgraph.api.proto.java.LambdaStorageSlot;
 import com.hederahashgraph.api.proto.java.Transaction;
 import com.hederahashgraph.api.proto.java.TransactionBody;
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class HapiLambdaSStore extends HapiTxnOp<HapiLambdaSStore> {
-    private List<HookLambdaStorageSlot> slots = new ArrayList<>();
+    private List<LambdaStorageSlot> slots = new ArrayList<>();
 
     @NonNull
     private final HookInstallerId.InstallerIdOneOfType ownerType;
@@ -37,7 +37,7 @@ public class HapiLambdaSStore extends HapiTxnOp<HapiLambdaSStore> {
             throw new IllegalArgumentException("Slots must be key-value pairs");
         }
         for (int i = 0; i < kv.length; i += 2) {
-            slots.add(HookLambdaStorageSlot.newBuilder()
+            slots.add(LambdaStorageSlot.newBuilder()
                     .setKey(fromPbj(kv[i]))
                     .setValue(fromPbj(kv[i + 1]))
                     .build());

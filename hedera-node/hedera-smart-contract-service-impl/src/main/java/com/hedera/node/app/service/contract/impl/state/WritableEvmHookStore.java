@@ -18,7 +18,7 @@ import static java.util.Objects.requireNonNull;
 import com.hedera.hapi.node.base.HookId;
 import com.hedera.hapi.node.base.HookInstallerId;
 import com.hedera.hapi.node.hooks.HookInstall;
-import com.hedera.hapi.node.hooks.HookLambdaStorageSlot;
+import com.hedera.hapi.node.hooks.LambdaStorageSlot;
 import com.hedera.hapi.node.state.contract.SlotValue;
 import com.hedera.hapi.node.state.hooks.EvmHookState;
 import com.hedera.hapi.node.state.hooks.EvmHookType;
@@ -60,7 +60,7 @@ public class WritableEvmHookStore extends ReadableEvmHookStore {
      * @param slots the slot updates
      * @throws HandleException if the lambda ID is not found
      */
-    public void updateSlots(@NonNull final HookId hookId, @NonNull final List<HookLambdaStorageSlot> slots)
+    public void updateSlots(@NonNull final HookId hookId, @NonNull final List<LambdaStorageSlot> slots)
             throws HandleException {
         final List<Bytes> keys = new ArrayList<>(slots.size());
         for (final var slot : slots) {

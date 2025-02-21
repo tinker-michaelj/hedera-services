@@ -19,7 +19,7 @@ import static java.util.stream.Collectors.toList;
 import com.esaulpaugh.headlong.abi.Address;
 import com.google.common.base.MoreObjects;
 import com.google.protobuf.ByteString;
-import com.hedera.hapi.node.base.LambdaCall;
+import com.hedera.hapi.node.base.HookCall;
 import com.hedera.node.app.hapi.utils.CommonUtils;
 import com.hedera.node.app.hapi.utils.EthSigsUtils;
 import com.hedera.node.app.hapi.utils.fee.FeeObject;
@@ -547,23 +547,21 @@ public class HapiCryptoTransfer extends HapiBaseTransfer<HapiCryptoTransfer> {
     }
 
     public static class CommonTransferAllowanceSwaps {
-        public static BiConsumer<HapiSpec, CryptoTransferTransactionBody.Builder> swapViaNftSenderLambda(
+        public static BiConsumer<HapiSpec, CryptoTransferTransactionBody.Builder> swapWithSenderAllowanceHook(
                 @NonNull final String sender,
                 @NonNull final String receiver,
                 @NonNull final String token,
                 final long serialNo,
-                @NonNull final LambdaCall lambdaCall) {
-            return (spec, op) -> {
-                op.addTokenTransfers(TokenTransferList.newBuilder()
-                        .setToken(asTokenId(token, spec))
-                        .addNftTransfers(NftTransfer.newBuilder()
-                                .setSenderAccountID(asId(sender, spec))
-                                .setReceiverAccountID(asId(receiver, spec))
-                                .setSerialNumber(serialNo)
-                                .setSenderTransferAllowanceLambdaCall(fromPbj(lambdaCall))
-                                .build())
-                        .build());
-            };
+                @NonNull final HookCall hookCall) {
+            return (spec, op) -> op.addTokenTransfers(TokenTransferList.newBuilder()
+                    .setToken(asTokenId(token, spec))
+                    .addNftTransfers(NftTransfer.newBuilder()
+                            .setSenderAccountID(asId(sender, spec))
+                            .setReceiverAccountID(asId(receiver, spec))
+                            .setSerialNumber(serialNo)
+                            .setSenderAllowanceHookCall(fromPbj(hookCall))
+                            .build())
+                    .build());
         }
     }
 }

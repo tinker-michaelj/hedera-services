@@ -518,31 +518,6 @@ message EvmHookCall {
 }
 
 /**
- * Defines how to call a lambda from within a transaction where
- * the lambda owner is implied by the point of use. (For example,
- * it would never make sense to try to use a transfer allowance
- * for account 0.0.X inside an AccountAmount that debits account
- * 0.0.Y; we only need to give the index of which lambda owned
- * by 0.0.Y that we want to use.)
- */
-message LambdaCall {
-    /**
-     * The index of the lambda to call.
-     */
-    uint64 index = 1;
-
-    /**
-     * If not empty, extra call data to pass to the lambda.
-     */
-    bytes call_data = 2;
-
-    /**
-     * If present, an explicit gas limit to use.
-     */
-    google.protobuf.UInt64Value gas_limit = 3;
-}
-
-/**
  * An account, and the amount that it sends or receives during a token transfer.
  *
  * This message is only relevant to fungible/common token transfers.
@@ -576,10 +551,10 @@ message AccountAmount {
     bool is_approval = 3;
 
     /**
-     * If set, a call to a lambda of type `TRANSFER_ALLOWANCE` installed on
+     * If set, a call to a hook of type `ACCOUNT_ALLOWANCE_HOOK` installed on
      * accountID that must succeed for the transaction to occur.
      */
-    LambdaCall transfer_allowance_lambda_call = 4;
+    HookCall allowance_hook_call = 4;
 }
 
 /**
@@ -640,16 +615,16 @@ message NftTransfer {
     bool is_approval = 4;
 
     /**
-     * If set, a call to a lambda of type `TRANSFER_ALLOWANCE` installed on
+     * If set, a call to a hook of type `ACCOUNT_ALLOWANCE_HOOK` installed on
      * senderAccountID that must succeed for the transaction to occur.
      */
-    LambdaCall sender_transfer_allowance_lambda_call = 5;
+    HookCall sender_allowance_hook_call = 5;
 
     /**
-     * If set, a call to a lambda of type `TRANSFER_ALLOWANCE` installed on
+     * If set, a call to a hook of type `ACCOUNT_ALLOWANCE_HOOK` installed on
      * receiverAccountID that must succeed for the transaction to occur.
      */
-    LambdaCall receiver_transfer_allowance_lambda_call = 6;
+    HookCall receiver_allowance_hook_call = 6;
 }
 
 /**

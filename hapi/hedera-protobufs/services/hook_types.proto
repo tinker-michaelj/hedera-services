@@ -167,7 +167,7 @@ message LambdaEvmHook {
   /**
    * Initial storage contents for the lambda, if any.
    */
-  repeated HookLambdaStorageSlot storage_slots = 2;
+  repeated LambdaStorageSlot storage_slots = 2;
 }
 
 /**
@@ -193,7 +193,7 @@ message EvmHookSpec {
 /**
  * A slot in the storage of a lambda EVM hook.
  */
-message HookLambdaStorageSlot {
+message LambdaStorageSlot {
   /**
    * The 32-byte key of the slot; leading zeros may be omitted.
    */

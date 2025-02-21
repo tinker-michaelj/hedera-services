@@ -41,5 +41,5 @@ message LambdaSStoreTransactionBody {
   /**
    * The updates to the storage of the lambda.
    */
-  repeated HookLambdaStorageSlot storage_slots = 2;
+  repeated LambdaStorageSlot storage_slots = 2;
 }

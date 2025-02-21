@@ -13,9 +13,9 @@ import com.hedera.hapi.node.base.FeeComponents;
 import com.hedera.hapi.node.base.FeeData;
 import com.hedera.hapi.node.base.FileID;
 import com.hedera.hapi.node.base.HederaFunctionality;
+import com.hedera.hapi.node.base.HookCall;
 import com.hedera.hapi.node.base.Key;
 import com.hedera.hapi.node.base.KeyList;
-import com.hedera.hapi.node.base.LambdaCall;
 import com.hedera.hapi.node.base.ResponseCodeEnum;
 import com.hedera.hapi.node.base.ResponseType;
 import com.hedera.hapi.node.base.ServiceEndpoint;
@@ -122,11 +122,11 @@ public class CommonPbjConverters {
         }
     }
 
-    public static @NonNull com.hederahashgraph.api.proto.java.LambdaCall fromPbj(@NonNull final LambdaCall lambdaCall) {
-        requireNonNull(lambdaCall);
+    public static @NonNull com.hederahashgraph.api.proto.java.HookCall fromPbj(@NonNull final HookCall hookCall) {
+        requireNonNull(hookCall);
         try {
-            final var bytes = asBytes(LambdaCall.PROTOBUF, lambdaCall);
-            return com.hederahashgraph.api.proto.java.LambdaCall.parseFrom(bytes);
+            final var bytes = asBytes(HookCall.PROTOBUF, hookCall);
+            return com.hederahashgraph.api.proto.java.HookCall.parseFrom(bytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

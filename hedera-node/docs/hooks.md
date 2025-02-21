@@ -371,7 +371,460 @@ message HookInstallerId {
 ```
 
 EVM hooks will be implemented by internal dispatch from each installing entity type's service to the `ContractService`.
-(Here also, a hook with a different programming model would require very different implementation details, so we focus
-on EVM hooks.)
+(A hook with a different programming model would require very different implementation details, so we restrict our
+attention to EVM hooks.)
 
-The dispatch for executing EVM hooks is a new `HookDispatchTransactionBody` with a choice of three actions.
+The dispatch for installing, executing, and uninstalling EVM hooks is a new `HookDispatchTransactionBody` with a choice
+of three actions.
+
+```protobuf
+/**
+ * Dispatches a hook action to an appropriate service.
+ */
+message HookDispatchTransactionBody {
+  oneof action {
+    /**
+     * The id of the hook to uninstall.
+     */
+    HookId hook_id_to_uninstall = 1;
+
+    /**
+     * The installation of a new hook.
+     */
+    HookInstallation installation = 2;
+
+    /**
+     * An execution of an installed hook.
+     */
+    HookExecution execution = 3;
+  }
+}
+
+/**
+ * Specifies the execution of a hook by its installer id and
+ * the details of the call (which includes the index).
+ */
+message HookExecution {
+  /**
+   * The id of the hook's installer.
+   */
+  HookInstallerId installer_id = 1;
+
+  /**
+   * The call details.
+   */
+  HookCall call = 2;
+}
+```
+
+Since a pure EVM hook by definition has no call trace or storage access, its execution has no footprint in the block
+stream. Executing a lambda EVM hook, however, produces `ContractCall` block items (`EventTransaction`,
+`TransactionResult`, `TransactionOutput`) as following children of the triggering transaction, in the order of each
+executed lambda.
+
+When an EVM hook is installed, its representation in `ContractService` state is as follows,
+
+```protobuf
+/**
+ * The representation of a lambda in state, including the previous and next indexes of its owner's lambda list.
+ */
+message EvmHookState {
+  /**
+   * For state proofs, the id of this hook.
+   */
+  proto.HookId hook_id = 1;
+
+  /**
+   * The type of the hook.
+   */
+  EvmHookType type = 2;
+
+  /**
+   * The type of the extension point the hook implements.
+   */
+  proto.HookExtensionPoint extension_point = 3;
+
+  /**
+   * The id of the contract with this hook's bytecode.
+   */
+  proto.ContractID hook_contract_id = 4;
+
+  /**
+   * The charging pattern of the hook.
+   */
+  proto.HookChargingSpec charging_spec = 5;
+
+  /**
+   * If set, the default gas limit to use when executing the lambda.
+   */
+  google.protobuf.UInt64Value default_gas_limit = 6;
+
+  /**
+   * True if the hook has been removed.
+   */
+  bool deleted = 7;
+
+  /**
+   * For a lambda EVM hook, its first storage key.
+   */
+  bytes first_contract_storage_key = 8;
+
+  /**
+   * If non-zero, the index of the hook preceding this one in the owner's
+   * doubly-linked list of hook.
+   */
+  uint64 previous_index = 9;
+
+  /**
+   * If non-zero, the index of the hook following this one in the owner's
+   * doubly-linked list of hooks.
+   */
+  uint64 next_index = 10;
+
+  /**
+   * The number of storage slots a lambda EVM hook is using.
+   */
+  uint32 num_storage_slots = 11;
+}
+
+/**
+ * The type of an EVM hook.
+ */
+enum EvmHookType {
+  /**
+   * A pure EVM hook.
+   */
+  PURE = 0;
+  /**
+   * A lambda EVM hook.
+   */
+  LAMBDA = 1;
+}
+```
+
+And its storage is keyed by the following type,
+
+```protobuf
+/**
+ * The key of a lambda's storage slot.
+ *
+ * For each lambda, its EVM storage is a mapping of 256-bit keys (or "words")
+ * to 256-bit values.
+ */
+message LambdaSlotKey {
+  /**
+   * The id of the lambda EVM hook that owns this slot.
+   */
+  proto.HookId hook_id = 1;
+
+  /**
+   * The EVM key of this slot, left-padded with zeros to form a 256-bit word.
+   */
+  bytes key = 2;
+}
+```
+
+### Account allowance HAPI protobufs
+
+The account allowance extension point is the only extension point defined in this HIP. Hooks for this extension are
+installed on an account via either a `CryptoCreate` or `CryptoUpdate` transaction. That is, we extend the
+`CryptoCreateTransactionBody` with a `hook_installs` field, and the `CryptoUpdateTransactionBody` with fields to
+install and uninstall hooks.
+
+```protobuf
+message CryptoCreateTransactionBody {
+  // ...
+
+  /**
+   * The hook installs to run immediately after creating this account.
+   */
+  repeated HookInstall hook_installs = 19;
+}
+
+message CryptoUpdateTransactionBody {
+  // ...
+
+  /**
+   * The hooks to install on the account.
+   */
+  repeated HookInstall hook_installs = 19;
+
+  /**
+   * The indexes of the hooks to uninstall from the account.
+   */
+  repeated uint64 hook_indexes_to_uninstall = 20;
+}
+```
+
+The `Account` message in `TokenService` state is extended to include the number of installed hooks, as well as
+the indexes of the first last hooks in the doubly-linked list of hooks installed by the account.
+
+```protobuf
+message Account {
+  // ...
+  /**
+   * The number of hook currently installed on this account.
+   */
+  uint64 number_installed_hooks = 36;
+
+  /**
+   * If positive, the index of the first hook installed on this account.
+   */
+  uint64 first_hook_index = 37;
+}
+```
+
+For a successful such `CryptoCreate` or `CryptoUpdate`, the indexes of the newly installed hooks will appear in the
+legacy record `TransactionReceipt` if record streams are still enabled.
+
+Now we need to let a `CryptoTransfer` reference such a hook. For this we extend the `AccountAmount` and `NftTransfer`
+messages used in the `CryptoTransferTransactionBody`.
+
+```protobuf
+message AccountAmount {
+  // ...
+  /**
+   * If set, a call to a hook of type `ACCOUNT_ALLOWANCE_HOOK` installed on
+   * accountID that must succeed for the transaction to occur.
+   */
+  HookCall allowance_hook_call = 4;
+}
+
+message NftTransfer {
+  // ...
+  /**
+   * If set, a call to a hook of type `ACCOUNT_ALLOWANCE_HOOK` installed on
+   * senderAccountID that must succeed for the transaction to occur.
+   */
+  HookCall sender_allowance_hook_call = 5;
+
+  /**
+   * If set, a call to a hook of type `ACCOUNT_ALLOWANCE_HOOK` installed on
+   * receiverAccountID that must succeed for the transaction to occur.
+   */
+  HookCall receiver_allowance_hook_call = 6;
+}
+```
+
+Note that `NftTransfer` supports both sender and receiver transfer allowance hooks, since the transaction may
+need to use the receiver hook to satisfy a `receiver_sig_required=true` setting.
+
+### The transfer allowance ABI
+
+The account allowance EVM hook ABI is as follows,
+
+```solidity
+// SPDX-License-Identifier: Apache-2.0
+pragma solidity >=0.4.9 <0.9.0;
+pragma experimental ABIEncoderV2;
+
+import './IHederaTokenService.sol';
+
+/// The interface for an account allowance EVM hook.
+interface IHieroAccountAllowanceEvmHook {
+    /// Combines HBAR and HTS asset transfers.
+    struct Transfers {
+        /// The HBAR transfers
+        IHederaTokenService.TransferList hbar;
+        /// The HTS token transfers
+        IHederaTokenService.TokenTransferList[] tokens;
+    }
+
+    /// Combines the full proposed transfers for a Hiero transaction,
+    /// including both its direct transfers and the implied HIP-18
+    /// custom fee transfers.
+    struct ProposedTransfers {
+        /// The transaction's direct transfers
+        Transfers direct;
+        /// The transaction's assessed custom fees
+        Transfers customFee;
+    }
+
+    /// Decides if the proposed transfers are allowed, optionally in
+    /// the presence of additional context encoded by the transaction
+    /// payer in the extra args.
+    /// @param installer The address of the installing account for which the hook is being executed
+    /// @param proposedTransfers The proposed transfers
+    /// @param args The extra arguments
+    /// @return true If the proposed transfers are allowed, false or revert otherwise
+    function allow(
+       address installer,
+       ProposedTransfers memory proposedTransfers,
+       bytes memory args
+    ) external payable returns (bool);
+}
+```
+
+### Examples
+
+Next we provide two examples of account allowance EVM hooks.
+
+#### One-time passcode allowances
+
+An NFT project prides itself on having only the very cleverest holders. They distribute their collection by daily
+sending a NFT from the treasury to account `0.0.X`, and publishing a puzzle. The answer to the puzzle is a one-time
+use passcode that allows the solver to collect the NFT.
+
+In particular, the project team installs on account `0.0.X` at index `1` an account allowance lambda EVM hook that
+references a contract created as below.
+
+```solidity
+import "./IHieroAccountAllowanceEvmHook.sol";
+
+contract OneTimeCodeTransferAllowance is IHieroAccountAllowanceEvmHook {
+    /// The hash of a one-time use passcode string, at storage slot 0x00
+    bytes32 passcodeHash;
+
+    /// Allow the proposed transfers if and only if the args are the
+    /// ABI encoding of the current one-time use passcode in storage.
+    ///
+    /// NOTE: this lambda's behavior does not depend on the installer address,
+    /// only the contents of the installed lambda's 0x00 storage slot
+    function allow(
+        address installer,
+        IHieroTransferAllowance.ProposedTransfers memory,
+        bytes memory args
+    ) external override payable returns (bool) {
+        require(address(this) == 0x16d, "Contract can only be called as a hook");
+        (string memory passcode) = abi.decode(args, (string));
+        bytes32 hash = keccak256(abi.encodePacked(passcode));
+        bool matches = hash == passcodeHash;
+        if (matches) {
+            passcodeHash = 0;
+        }
+        return matches;
+    }
+}
+```
+
+As great aficionados of the project, we see one day that `0.0.X` holds our favorite NFT of all, serial `123`; and that a
+`LambdaSStore` from `0.0.X` set the storage slot with key `0x00` to the hash
+`0xc7eba0ccc01e89eb5c2f8e450b820ee9bb6af63e812f7ea12681cfdc454c4687`. We rush to solve the puzzle, and deduce the
+passcode is the string, `"These violent delights have violent ends"`. Now we can transfer the NFT to our account `0.0.U`
+by submitting a `CryptoTransfer` with,
+
+```text
+NftTransfer {
+  senderAccountID: 0.0.X
+  receiverAccountID: 0.0.U
+  serialNumber: 123
+  sender_allowance_hook_call: HookCall {
+    index: 1
+    evm_hook_call: EvmHookCall {
+      evm_call_data: "These violent delights have violent ends"
+    }
+  }
+}
+```
+
+Compare this example to the pure smart contract approach, where the project would need to write a more complex smart
+contract that is aware of what serial number it currently holds; and makes calls to the HTS system contract to
+distribute NFTs. Instead of the team using `LambdaSStore` to update the passcode with less overhead and cost to
+the network than even a `ConsensusSubmitMessage`, they would need to submit a `ContractCall`. Instead of us using a
+`CryptoTransfer` to collect our prize with maximum legibility and minimum cost, we would also need to submit a
+`ContractCall` to the project's smart contract with a significantly higher gas limit.
+
+For a trivial example like this, the cost and efficiency deltas may not seem decisive (unless the project was
+running a very large number of these puzzles). But the idea of releasing contracts from the burden of duplicating
+native protocol logic is deceptively powerful. The cost and efficiency savings for a complex dApp could be enormous,
+unlocking entire new classes of applications that would be impractical to build on Hedera today.
+
+#### Receiver signature waiver for HTS assets without custom fees
+
+In this example we have our own account `0.0.Y` with `receiver_sig_required=true`, and want to carve out an exception
+for exactly HTS token credits to our account with no assessed custom fees. We install a pure EVM hook at index `2`
+whose referenced contract is as follows,
+
+```solidity
+import "./IHederaTokenService.sol";
+import "./IHieroAccountAllowanceEvmHook.sol";
+
+contract CreditSansCustomFeesTokenAllowance is IHieroAccountAllowanceEvmHook {
+    /// Allows the proposed transfers only if,
+    ///   (1) The only transfers are direct HTS asset transfers
+    ///   (2) The installer is not debited
+    ///   (3) The installer is credited
+    function allow(
+        address installer,
+        IHieroTransferAllowance.ProposedTransfers memory proposedTransfers,
+        bytes memory args
+    ) external override view returns (bool) {
+        require(address(this) == 0x16d, "Contract can only be called as a hook");
+        if (proposedTransfers.direct.hbar.transfers.length > 0
+                || proposedTransfers.customFee.hbar.transfers.length > 0
+                || proposedTransfers.customFee.tokens.length > 0) {
+            return false;
+        }
+        bool installerCredited = false;
+        for (uint256 i = 0; i < proposedTransfers.tokens.length; i++) {
+            IHederaTokenService.AccountAmount[] memory transfers = proposedTransfers.tokens[i].transfers;
+            for (uint256 j = 0; j < transfers.length; j++) {
+                if (transfers[j].accountID == installer) {
+                    if (transfers[j].amount < 0) {
+                        return false;
+                    } else if (transfers[j].amount > 0) {
+                        installerCredited = true;
+                    }
+                }
+            }
+            IHederaTokenService.NftTransfer[] memory nftTransfers = proposedTransfers.tokens[i].nftTransfers;
+            for (uint256 j = 0; j < nftTransfers.length; j++) {
+                if (nftTransfers[j].senderAccountID == installer) {
+                    return false;
+                } else if (nftTransfers[j].receiverAccountID == installer) {
+                    installerCredited = true;
+                }
+            }
+        }
+        return installerCredited;
+    }
+}
+```
+
+## Backwards Compatibility
+
+This HIP adds a net new feature to the protocol. Any account that does not install a hook will see
+identical behavior in all circumstances.
+
+## Security Implications
+
+Because EVM hook executions are subject to the same `gas` charges and throttles as normal contract executions,
+they do not introduce any new denial of service vector.
+
+The main security concerns with account allowance hooks are the same as with smart contracts. That is,
+- A hook author could code a bug allowing an attacker to exploit the hook.
+- A malicious dApp could trick a user into installing a hook with a backdoor for the dApp author to exploit.
+
+Hook authors must mitigate the risk of bugs by rigorous testing and code review. Users must remain vigilant about
+signing transactions from dApps of questionable integrity.
+
+## Reference Implementation
+
+In progress, please see [here](https://github.com/hashgraph/hedera-services/pull/17551).
+
+## Rejected Ideas
+
+1. We considered **automatic** hooks that execute even without being explicitly referenced by a transaction.
+   While this feature could be useful in the future, we deemed it out of scope for this HIP.
+2. We considered adding `IHieroExecutionEnv` interface to the `0x16d` system contract with APIs available only
+   to executing EVM hooks. While interesting, there was no obvious benefit for account allowances and the initial
+   implementation.
+3. We considered using a family of allowance extension points, one for each type of asset exchange. (That is,
+   `PRE_HBAR_DEBIT`, `PRE_FUNGIBLE_CREDIT`, `PRE_NFT_TRANSFER`, and so on.) Ultimately the single `ACCOUNT_ALLOWANCE`
+   extension point seemed more approachable, especially as calls can encode any extra context the hook's `allow()`
+   method needs to efficiently focus on one aspect of the proposed transfers.
+
+## Open Issues
+
+No known open issues.
+
+## References
+
+- [HIP-18: Custom Hedera Token Service Fees](https://hips.hedera.com/hip/hip-18)
+- [HIP-376: Support Approve/Allowance/transferFrom standard calls from ERC20 and ERC721](https://hips.hedera.com/hip/hip-376)
+- [HIP-904: Frictionless Airdrops](https://hips.hedera.com/hip/hip-904)
+- [HIP-991: Permissionless revenue-generating Topic Ids for Topic Operators](https://hips.hedera.com/hip/hip-991)
+
+## Copyright/license
+
+This document is licensed under the Apache License, Version 2.0 -- see [LICENSE](../LICENSE) or (https://www.apache.org/licenses/LICENSE-2.0)
