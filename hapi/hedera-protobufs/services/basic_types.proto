@@ -451,30 +451,70 @@ message TransactionID {
 }
 
 /**
- * The id of an entity that owns a lambda.
+ * Once a hook is installed, its id.
  */
-message LambdaOwnerID {
-    oneof owner_id {
+message HookId {
+    /**
+     * The id of the hook's installer.
+     */
+    HookInstallerId installer_id = 1;
+
+    /**
+     * A unique identifier for the hook given the installer.
+     */
+    uint64 index = 2;
+}
+
+/**
+ * The id of an entity that has installed a hook.
+ */
+message HookInstallerId {
+    oneof installer_id {
         /**
-         * The account owning the lambda.
+         * An account installing a hook.
          */
         AccountID account_id = 1;
     }
 }
 
 /**
- * Once a lambda is installed, its id.
+ * Specifies a call to a hook from within a transaction where
+ * the hook owner is implied by the point of use. (For example,
+ * it would never make sense to try to use an account allowance
+ * hook for account 0.0.X inside an AccountAmount for account
+ * 0.0.Y; hence we only need to give the index of which of
+ * 0.0.Y's hooks we want to call.)
  */
-message LambdaID {
+message HookCall {
     /**
-     * The id of the lambda's owner.
+     * The index of the hook to call.
      */
-    LambdaOwnerID owner_id = 1;
+    uint64 index = 1;
 
     /**
-     * A unique identifier for the lambda relative to its owner.
+     * Specifies details of the call.
      */
-    uint64 index = 2;
+    oneof call_spec {
+        /**
+         * Specification of how to call an EVM hook.
+         */
+        EvmHookCall evm_hook_call = 2;
+    }
+}
+
+/**
+ * Specifies details of a call to an EVM hook.
+ */
+message EvmHookCall {
+    /**
+     * Extra call data to pass.
+     */
+    bytes evm_call_data = 1;
+
+    /**
+     * If set, an explicit gas limit to use.
+     */
+    google.protobuf.UInt64Value gas_limit = 3;
 }
 
 /**
@@ -1765,14 +1805,14 @@ enum HederaFunctionality {
     CrsPublication = 107;
 
     /**
-     * Update one or more storage slots in a lambda.
+     * Update one or more storage slots in an lambda EVM hook
      */
     LambdaSStore = 108;
 
     /**
-     * (Internal-only) Dispatch a lambda action.
+     * (Internal-only) Dispatch a hook action.
      */
-    LambdaDispatch = 109;
+    HookDispatch = 109;
 }
 
 /**

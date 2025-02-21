@@ -131,7 +131,7 @@ contract HookContract {
 }
 ```
 
-### HAPI protobufs
+### Core HAPI protobufs
 
 A hook's extension point is one of an enumeration that now includes just the account allowance hook,
 
@@ -286,3 +286,90 @@ message TransactionReceipt {
   repeated uint64 installed_hook_indexes = 16;
 }
 ```
+
+Once a hook is installed to an entity, a transaction generally references it by index relative to an implicit owner.
+The details of the call are specified based on its type; for example, EVM hook calls are specified by an `EvmHookCall`
+message that gives optional call data and gas limit.
+
+If the called hook does not match the given call specification, the network will fail the transaction with 
+`BAD_HOOK_REQUEST`. If there is no hook installed at the specified index, the network will fail the transaction 
+with `HOOK_NOT_FOUND`.
+```protobuf
+/**
+ * Specifies a call to a hook from within a transaction where
+ * the hook owner is implied by the point of use. (For example,
+ * it would never make sense to try to use an account allowance
+ * hook for account 0.0.X inside an AccountAmount for account 
+ * 0.0.Y; hence we only need to give the index of which of 
+ * 0.0.Y's hooks we want to call.)
+ */
+message HookCall {
+  /**
+   * The index of the hook to call.
+   */
+  uint64 index = 1;
+
+  /**
+   * Specifies details of the call.
+   */
+  oneof call_spec {
+    /**
+     * Specification of how to call an EVM hook.
+     */
+    EvmHookCall evm_hook_call = 2;
+  }
+}
+
+/**
+ * Specifies details of a call to an EVM hook.
+ */
+message EvmHookCall {
+  /**
+   * Extra call data to pass.
+   */
+  bytes evm_call_data = 1;
+
+  /**
+   * If set, an explicit gas limit to use.
+   */
+  google.protobuf.UInt64Value gas_limit = 3;
+}
+```
+
+### Core system protobufs
+
+Once a hook is installed, it has an id in the network state.
+```protobuf
+/**
+ * Once a hook is installed, its id.
+ */
+message HookId {
+  /**
+   * The id of the hook's installer.
+   */
+  HookInstallerId installer_id = 1;
+
+  /**
+   * A unique identifier for the hook given the installer.
+   */
+  uint64 index = 2;
+}
+
+/**
+ * The id of an entity that has installed a hook.
+ */
+message HookInstallerId {
+  oneof installer_id {
+    /**
+     * An account installing a hook.
+     */
+    AccountID account_id = 1;
+  }
+}
+```
+
+EVM hooks will be implemented by internal dispatch from each installing entity type's service to the `ContractService`.
+(Here also, a hook with a different programming model would require very different implementation details, so we focus
+on EVM hooks.) 
+
+The dispatch for executing EVM hooks is a new `HookDispatchTransactionBody` with a choice of three actions.

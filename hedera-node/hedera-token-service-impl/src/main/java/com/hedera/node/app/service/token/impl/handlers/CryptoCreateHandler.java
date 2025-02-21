@@ -50,12 +50,11 @@ import static java.util.Objects.requireNonNull;
 import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.Duration;
 import com.hedera.hapi.node.base.HederaFunctionality;
+import com.hedera.hapi.node.base.HookId;
+import com.hedera.hapi.node.base.HookInstallerId;
 import com.hedera.hapi.node.base.Key;
-import com.hedera.hapi.node.base.LambdaID;
-import com.hedera.hapi.node.base.LambdaOwnerID;
 import com.hedera.hapi.node.base.SubType;
-import com.hedera.hapi.node.lambda.LambdaCreation;
-import com.hedera.hapi.node.lambda.LambdaDispatchTransactionBody;
+import com.hedera.hapi.node.lambda.HookDispatchTransactionBody;
 import com.hedera.hapi.node.state.token.Account;
 import com.hedera.hapi.node.token.CryptoCreateTransactionBody;
 import com.hedera.hapi.node.token.CryptoUpdateTransactionBody;
@@ -84,6 +83,7 @@ import com.hedera.node.config.data.LedgerConfig;
 import com.hedera.node.config.data.StakingConfig;
 import com.hedera.node.config.data.TokensConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
+import com.hederahashgraph.api.proto.java.HookInstallation;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -288,15 +288,15 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
 
         for (final var installation : op.lambdaInstallations()) {
             final long index = installation.index();
-            final LambdaID lambdaId = LambdaID.newBuilder()
-                    .ownerId(LambdaOwnerID.newBuilder()
+            final HookId hookId = HookId.newBuilder()
+                    .installerId(HookInstallerId.newBuilder()
                             .accountId(createdAccountID)
                             .build())
                     .index(index)
                     .build();
             final var body = TransactionBody.newBuilder()
-                    .lambdaDispatch(LambdaDispatchTransactionBody.newBuilder()
-                            .creation(new LambdaCreation(lambdaId, installation, index))
+                    .hookDispatch(HookDispatchTransactionBody.newBuilder()
+                            .installation(new HookInstallation(hookId, installation, index))
                             .build())
                     .build();
             final var dispatchBuilder = context.dispatch(DispatchOptions.stepDispatch(

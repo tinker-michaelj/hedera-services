@@ -61,7 +61,7 @@ module com.hedera.node.hapi {
     exports com.hedera.hapi.node.state.file;
     exports com.hedera.hapi.node.state.hints;
     exports com.hedera.hapi.node.state.history;
-    exports com.hedera.hapi.node.state.lambda;
+    exports com.hedera.hapi.node.state.hooks;
     exports com.hedera.hapi.node.state.recordcache;
     exports com.hedera.hapi.node.state.recordcache.codec;
     exports com.hedera.hapi.node.state.blockrecords;

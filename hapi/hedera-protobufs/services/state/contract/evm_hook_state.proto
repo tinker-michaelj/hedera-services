@@ -29,36 +29,36 @@ package com.hedera.hapi.node.state.lambda;
  */
 
 option java_package = "com.hederahashgraph.api.proto.java";
-// <<<pbj.java_package = "com.hedera.hapi.node.state.lambda">>> This comment is special code for setting PBJ Compiler java package
+// <<<pbj.java_package = "com.hedera.hapi.node.state.hooks">>> This comment is special code for setting PBJ Compiler java package
 option java_multiple_files = true;
 
 import "basic_types.proto";
-import "lambda.proto";
+import "hook_types.proto";
 import "google/protobuf/wrappers.proto";
 
 /**
  * The representation of a lambda in state, including the previous and next indexes of its owner's lambda list.
  */
-message LambdaState {
+message EvmHookState {
   /**
-   * For state proof legibility, the id of this lambda.
+   * For state proofs, the id of this hook.
    */
-  proto.LambdaID lambda_id = 1;
+  proto.HookId hook_id = 1;
 
   /**
-   * The id of the hook contract with this lambda's bytecode.
+   * The type of the extension point the hook implements.
    */
-  proto.ContractID hook_contract_id = 2;
+  proto.HookExtensionPoint extension_point = 2;
 
   /**
-   * The type of the lambda.
+   * The id of the contract with this hook's bytecode.
    */
-  proto.LambdaType type = 3;
+  proto.ContractID hook_contract_id = 3;
 
   /**
-   * The charging pattern of the lambda.
+   * The charging pattern of the hook.
    */
-  proto.LambdaChargingPattern charging_pattern = 4;
+  proto.HookChargingSpec charging_spec = 4;
 
   /**
    * If set, the default gas limit to use when executing the lambda.
@@ -66,29 +66,29 @@ message LambdaState {
   google.protobuf.UInt64Value default_gas_limit = 5;
 
   /**
-   * True if the lambda has been uninstalled.
+   * True if the hook has been uninstalled.
    */
   bool deleted = 6;
 
   /**
-   * The lambda's first contract storage key.
+   * For a lambda EVM hook, its first storage key.
    */
   bytes first_contract_storage_key = 7;
 
   /**
-   * If non-zero, the index of the lambda preceding this one in the owner's
-   * doubly-linked list of lambdas.
+   * If non-zero, the index of the hook preceding this one in the owner's
+   * doubly-linked list of hook.
    */
   uint64 previous_index = 8;
 
   /**
-   * If non-zero, the index of the lambda following this one in the owner's
-   * doubly-linked list of lambdas.
+   * If non-zero, the index of the hook following this one in the owner's
+   * doubly-linked list of hooks.
    */
   uint64 next_index = 9;
 
   /**
-   * The number of storage slots the lambda is using.
+   * The number of storage slots a lambda EVM hook is using.
    */
   uint32 num_storage_slots = 10;
 }
@@ -101,9 +101,9 @@ message LambdaState {
  */
 message LambdaSlotKey {
   /**
-   * The id of the lambda that owns this slot.
+   * The id of the lambda EVM hook that owns this slot.
    */
-  proto.LambdaID lambda_id = 1;
+  proto.HookId hook_id = 1;
 
   /**
    * The EVM key of this slot, left-padded with zeros to form a 256-bit word.

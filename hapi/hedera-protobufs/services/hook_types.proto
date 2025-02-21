@@ -39,6 +39,27 @@ enum HookExtensionPoint {
   ACCOUNT_ALLOWANCE_HOOK = 0;
 }
 
+/**
+ * Specifies the installation of a new hook at a specific id for the given owner.
+ */
+message HookInstallation {
+  /**
+   * The id of the hook's installer.
+   */
+  HookInstallerId installer_id = 1;
+
+  /**
+   * The hook install details.
+   */
+  HookInstall install = 2;
+
+  /**
+   * The index of the hook the new installation should be previous
+   * to in the owner's doubly-linked list of hooks.
+   */
+  uint64 next_hook_index = 3;
+}
+
 /***
  * How to install a hook.
  */
@@ -77,18 +98,28 @@ message HookInstall {
   proto.Key admin_key = 5;
 
   /**
-   * The charging pattern for the hook.
+   * The charging specification for the hook.
+   */
+  HookChargingSpec charging_spec = 6;
+}
+
+/**
+ * Specifies how a hook's execution costs are charged.
+ */
+message HookChargingSpec {
+  /**
+   * The charging specification.
    */
   oneof charging_spec {
     /**
-     * The payer of the transaction calling the hook pays for its execution.
+     * The default charging pattern for a hook, which is to charge the caller.
      */
-    CallerPays caller_pays = 6;
+    CallerPays caller_pays = 1;
     /**
-     * The payer of the transaction calling the hook pays for its execution if
-     * the hook fails; otherwise, a specified payer pays.
+     * A charging pattern for a hook where the caller is charged only if the
+     * hook fails.
      */
-    CallerPaysOnFailure caller_pays_on_failure = 7;
+    CallerPaysOnFailure caller_pays_on_failure = 2;
   }
 }
 
