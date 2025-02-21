@@ -3,7 +3,7 @@
 hip: <HIP number (assigned by the HIP editor)>
 title: Hiero hooks and an application to allowances
 author: Michael Tinker <@tinker-michaelj>
-working-group: Richard Bair <@rbair23>, Jasper Potts <@jasperpotts>, Atul Mahamuni <atul@hashgraph.com>,  Matthew DeLorenzo <@littletarzan>, Steven Sheehy <@steven-sheehy>
+working-group: Richard Bair <@rbair23>, Jasper Potts <@jasperpotts>, Atul Mahamuni <atul@hashgraph.com>,  Matthew DeLorenzo <@littletarzan>, Edward Wertz <@edward-swirldslabs>, Steven Sheehy <@steven-sheehy>
 requested-by: Hashgraph
 type: Standards Track
 category: Service
