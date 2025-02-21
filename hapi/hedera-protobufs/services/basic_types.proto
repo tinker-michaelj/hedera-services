@@ -1810,9 +1810,9 @@ enum HederaFunctionality {
     LambdaSStore = 108;
 
     /**
-     * (Internal-only) Dispatch a hook action.
+     * (Internal-only) Dispatch an EVM hook action.
      */
-    HookDispatch = 109;
+    EvmHookDispatch = 109;
 }
 
 /**

@@ -10,7 +10,7 @@
  */
 syntax = "proto3";
 
-package com.hedera.hapi.node.state.lambda;
+package com.hedera.hapi.node.state.hooks;
 
 /*
  * Copyright (C) 2023-2024 Hedera Hashgraph, LLC
@@ -46,51 +46,56 @@ message EvmHookState {
   proto.HookId hook_id = 1;
 
   /**
+   * The type of the hook.
+   */
+  EvmHookType type = 2;
+
+  /**
    * The type of the extension point the hook implements.
    */
-  proto.HookExtensionPoint extension_point = 2;
+  proto.HookExtensionPoint extension_point = 3;
 
   /**
    * The id of the contract with this hook's bytecode.
    */
-  proto.ContractID hook_contract_id = 3;
+  proto.ContractID hook_contract_id = 4;
 
   /**
    * The charging pattern of the hook.
    */
-  proto.HookChargingSpec charging_spec = 4;
+  proto.HookChargingSpec charging_spec = 5;
 
   /**
    * If set, the default gas limit to use when executing the lambda.
    */
-  google.protobuf.UInt64Value default_gas_limit = 5;
+  google.protobuf.UInt64Value default_gas_limit = 6;
 
   /**
-   * True if the hook has been uninstalled.
+   * True if the hook has been removed.
    */
-  bool deleted = 6;
+  bool deleted = 7;
 
   /**
    * For a lambda EVM hook, its first storage key.
    */
-  bytes first_contract_storage_key = 7;
+  bytes first_contract_storage_key = 8;
 
   /**
    * If non-zero, the index of the hook preceding this one in the owner's
    * doubly-linked list of hook.
    */
-  uint64 previous_index = 8;
+  uint64 previous_index = 9;
 
   /**
    * If non-zero, the index of the hook following this one in the owner's
    * doubly-linked list of hooks.
    */
-  uint64 next_index = 9;
+  uint64 next_index = 10;
 
   /**
    * The number of storage slots a lambda EVM hook is using.
    */
-  uint32 num_storage_slots = 10;
+  uint32 num_storage_slots = 11;
 }
 
 /**
@@ -109,4 +114,18 @@ message LambdaSlotKey {
    * The EVM key of this slot, left-padded with zeros to form a 256-bit word.
    */
   bytes key = 2;
+}
+
+/**
+ * The type of an EVM hook.
+ */
+enum EvmHookType {
+  /**
+   * A pure EVM hook.
+   */
+  PURE = 0;
+  /**
+   * A lambda EVM hook.
+   */
+  LAMBDA = 1;
 }

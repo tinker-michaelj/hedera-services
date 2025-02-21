@@ -50,10 +50,10 @@ import static java.util.Objects.requireNonNull;
 import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.Duration;
 import com.hedera.hapi.node.base.HederaFunctionality;
-import com.hedera.hapi.node.base.HookId;
 import com.hedera.hapi.node.base.HookInstallerId;
 import com.hedera.hapi.node.base.Key;
 import com.hedera.hapi.node.base.SubType;
+import com.hedera.hapi.node.hooks.HookInstallation;
 import com.hedera.hapi.node.lambda.HookDispatchTransactionBody;
 import com.hedera.hapi.node.state.token.Account;
 import com.hedera.hapi.node.token.CryptoCreateTransactionBody;
@@ -83,7 +83,6 @@ import com.hedera.node.config.data.LedgerConfig;
 import com.hedera.node.config.data.StakingConfig;
 import com.hedera.node.config.data.TokensConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
-import com.hederahashgraph.api.proto.java.HookInstallation;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -286,22 +285,19 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
             }
         }
 
-        for (final var installation : op.lambdaInstallations()) {
-            final long index = installation.index();
-            final HookId hookId = HookId.newBuilder()
-                    .installerId(HookInstallerId.newBuilder()
-                            .accountId(createdAccountID)
-                            .build())
-                    .index(index)
-                    .build();
+        long nextIndex = 0;
+        for (final var install : op.hookInstalls()) {
+            final var installerId =
+                    HookInstallerId.newBuilder().accountId(createdAccountID).build();
             final var body = TransactionBody.newBuilder()
-                    .hookDispatch(HookDispatchTransactionBody.newBuilder()
-                            .installation(new HookInstallation(hookId, installation, index))
+                    .evmHookDispatch(HookDispatchTransactionBody.newBuilder()
+                            .installation(new HookInstallation(installerId, install, nextIndex))
                             .build())
                     .build();
             final var dispatchBuilder = context.dispatch(DispatchOptions.stepDispatch(
                     context.payer(), body, StreamBuilder.class, NOOP_TRANSACTION_CUSTOMIZER));
             validateSuccess(dispatchBuilder.status());
+            nextIndex = install.index();
         }
     }
 

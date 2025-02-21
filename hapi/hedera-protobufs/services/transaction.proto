@@ -665,7 +665,7 @@ message TransactionBody {
         /**
          * An internal-only transaction body for dispatching a hook installation, removal, or execution.
          */
-        HookDispatchTransactionBody hook_dispatch = 74;
+        HookDispatchTransactionBody evm_hook_dispatch = 74;
     }
 
     /**

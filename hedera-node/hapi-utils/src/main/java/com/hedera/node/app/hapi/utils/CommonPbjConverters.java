@@ -23,7 +23,7 @@ import com.hedera.hapi.node.base.SubType;
 import com.hedera.hapi.node.base.Timestamp;
 import com.hedera.hapi.node.base.TokenID;
 import com.hedera.hapi.node.base.Transaction;
-import com.hedera.hapi.node.lambda.LambdaInstallation;
+import com.hedera.hapi.node.hooks.HookInstall;
 import com.hedera.hapi.node.scheduled.SchedulableTransactionBody;
 import com.hedera.hapi.node.scheduled.ScheduleInfo;
 import com.hedera.hapi.node.state.common.EntityNumber;
@@ -132,12 +132,12 @@ public class CommonPbjConverters {
         }
     }
 
-    public static @NonNull com.hederahashgraph.api.proto.java.LambdaInstallation fromPbj(
-            @NonNull final LambdaInstallation lambdaInstallation) {
-        requireNonNull(lambdaInstallation);
+    public static @NonNull com.hederahashgraph.api.proto.java.HookInstall fromPbj(
+            @NonNull final HookInstall hookInstall) {
+        requireNonNull(hookInstall);
         try {
-            final var bytes = asBytes(LambdaInstallation.PROTOBUF, lambdaInstallation);
-            return com.hederahashgraph.api.proto.java.LambdaInstallation.parseFrom(bytes);
+            final var bytes = asBytes(HookInstall.PROTOBUF, hookInstall);
+            return com.hederahashgraph.api.proto.java.HookInstall.parseFrom(bytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

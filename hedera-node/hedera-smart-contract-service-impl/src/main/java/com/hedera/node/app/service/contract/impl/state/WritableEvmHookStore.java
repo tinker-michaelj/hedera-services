@@ -1,27 +1,12 @@
-/*
- * Copyright (C) 2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.service.contract.impl.state;
 
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_LAMBDA_ID;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.LAMBDA_INDEX_IN_USE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.HOOK_INDEX_IN_USE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.HOOK_NOT_FOUND;
 import static com.hedera.node.app.hapi.utils.EntityType.LAMBDA;
 import static com.hedera.node.app.service.contract.impl.infra.IterableStorageManager.insertAccessedValue;
 import static com.hedera.node.app.service.contract.impl.infra.IterableStorageManager.removeAccessedValue;
-import static com.hedera.node.app.service.contract.impl.schemas.V061ContractSchema.LAMBDA_STATES_KEY;
+import static com.hedera.node.app.service.contract.impl.schemas.V061ContractSchema.EVM_HOOK_STATES_KEY;
 import static com.hedera.node.app.service.contract.impl.schemas.V061ContractSchema.LAMBDA_STORAGE_KEY;
 import static com.hedera.node.app.service.contract.impl.state.StorageAccess.StorageAccessType.INSERTION;
 import static com.hedera.node.app.service.contract.impl.state.StorageAccess.StorageAccessType.REMOVAL;
@@ -30,16 +15,17 @@ import static com.hedera.node.app.service.contract.impl.state.StorageAccess.Stor
 import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
 import static java.util.Objects.requireNonNull;
 
-import com.hedera.hapi.node.base.LambdaID;
-import com.hedera.hapi.node.lambda.LambdaInstallation;
-import com.hedera.hapi.node.lambda.LambdaStorageSlot;
+import com.hedera.hapi.node.base.HookId;
+import com.hedera.hapi.node.base.HookInstallerId;
+import com.hedera.hapi.node.hooks.HookInstall;
+import com.hedera.hapi.node.hooks.HookLambdaStorageSlot;
 import com.hedera.hapi.node.state.contract.SlotValue;
-import com.hedera.hapi.node.state.lambda.LambdaSlotKey;
-import com.hedera.hapi.node.state.lambda.LambdaState;
+import com.hedera.hapi.node.state.hooks.EvmHookState;
+import com.hedera.hapi.node.state.hooks.EvmHookType;
+import com.hedera.hapi.node.state.hooks.LambdaSlotKey;
 import com.hedera.node.app.service.contract.impl.state.StorageAccess.StorageAccessType;
 import com.hedera.node.app.spi.ids.WritableEntityCounters;
 import com.hedera.node.app.spi.workflows.HandleException;
-import com.hedera.node.config.data.HederaConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import com.swirlds.state.spi.WritableKVState;
 import com.swirlds.state.spi.WritableStates;
@@ -47,23 +33,22 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.LongSupplier;
 
 /**
  * Read/write access to lambda states.
  */
-public class WritableLambdaStore extends ReadableLambdaStore {
+public class WritableEvmHookStore extends ReadableEvmHookStore {
     private final ContractStateStore stateStore;
     private final WritableEntityCounters entityCounters;
-    private final WritableKVState<LambdaID, LambdaState> lambdaStates;
+    private final WritableKVState<HookId, EvmHookState> hookStates;
     private final WritableKVState<LambdaSlotKey, SlotValue> storage;
 
-    public WritableLambdaStore(
+    public WritableEvmHookStore(
             @NonNull final WritableStates states, @NonNull final WritableEntityCounters entityCounters) {
         super(states);
         this.stateStore = new WritableContractStateStore(states, entityCounters);
         this.entityCounters = requireNonNull(entityCounters);
-        this.lambdaStates = states.get(LAMBDA_STATES_KEY);
+        this.hookStates = states.get(EVM_HOOK_STATES_KEY);
         this.storage = states.get(LAMBDA_STORAGE_KEY);
     }
 
@@ -71,17 +56,17 @@ public class WritableLambdaStore extends ReadableLambdaStore {
      * Puts the given slot values for the given lambda, ensuring storage linked list pointers are preserved.
      * If a new value is {@link Bytes#EMPTY}, the slot is removed.
      *
-     * @param lambdaId the lambda ID
+     * @param hookId the lambda ID
      * @param slots the slot updates
      * @throws HandleException if the lambda ID is not found
      */
-    public void updateSlots(@NonNull final LambdaID lambdaId, @NonNull final List<LambdaStorageSlot> slots)
+    public void updateSlots(@NonNull final HookId hookId, @NonNull final List<HookLambdaStorageSlot> slots)
             throws HandleException {
         final List<Bytes> keys = new ArrayList<>(slots.size());
         for (final var slot : slots) {
             keys.add(slot.key());
         }
-        final var view = getView(lambdaId, keys);
+        final var view = getView(hookId, keys);
         final var contractId = view.contractId();
         var firstKey = view.firstStorageKey();
         int slotUsageChange = 0;
@@ -107,8 +92,8 @@ public class WritableLambdaStore extends ReadableLambdaStore {
         }
         if (slotUsageChange != 0) {
             final var oldState = view.state();
-            lambdaStates.put(
-                    lambdaId,
+            hookStates.put(
+                    hookId,
                     oldState.copyBuilder()
                             .firstContractStorageKey(firstKey)
                             .numStorageSlots(oldState.numStorageSlots() + slotUsageChange)
@@ -120,43 +105,55 @@ public class WritableLambdaStore extends ReadableLambdaStore {
     /**
      * Marks the lambda as deleted.
      *
-     * @param lambdaId the lambda ID
+     * @param hookId the lambda ID
      * @throws HandleException if the lambda ID is not found
      */
-    public void markDeleted(@NonNull final LambdaID lambdaId) {
-        final var state = lambdaStates.get(lambdaId);
-        validateTrue(state != null, INVALID_LAMBDA_ID);
-        lambdaStates.put(lambdaId, state.copyBuilder().deleted(true).build());
+    public void markDeleted(@NonNull final HookId hookId) {
+        final var state = hookStates.get(hookId);
+        validateTrue(state != null, HOOK_NOT_FOUND);
+        hookStates.put(hookId, state.copyBuilder().deleted(true).build());
     }
 
     /**
      * Tries to install a new lambda with the given id.
      *
-     * @param lambdaId the lambda ID
-     * @param installation the installation
-     * @param contractNumSupplier the contract number supplier
-     * @param hederaConfig the Hedera configuration
+     * @param installerId the installer ID
+     * @param install the installation
      * @throws HandleException if the installation is invalid
      */
-    public void installLambda(
-            final long nextIndex,
-            @NonNull final LambdaID lambdaId,
-            @NonNull final LongSupplier contractNumSupplier,
-            @NonNull final HederaConfig hederaConfig,
-            @NonNull final LambdaInstallation installation)
+    public void installEvmHook(
+            final long nextIndex, @NonNull final HookInstallerId installerId, @NonNull final HookInstall install)
             throws HandleException {
-        validateTrue(lambdaStates.get(lambdaId) == null, LAMBDA_INDEX_IN_USE);
-        final var builder = LambdaState.newBuilder();
-        final var state = builder.lambdaId(lambdaId)
-                .hookContractId(installation.hookContractIdOrThrow())
-                .type(installation.type())
-                .chargingPattern(installation.chargingPattern())
-                .defaultGasLimit(installation.defaultGasLimit())
+        final var hookId = new HookId(installerId, install.index());
+        validateTrue(hookStates.get(hookId) == null, HOOK_INDEX_IN_USE);
+        final var type =
+                switch (install.hook().kind()) {
+                    case PURE_EVM_HOOK -> EvmHookType.PURE;
+                    case LAMBDA_EVM_HOOK -> EvmHookType.LAMBDA;
+                    default -> throw new IllegalStateException("Not an EVM hook - " + install);
+                };
+        final var evmHookSpec = type == EvmHookType.PURE
+                ? install.pureEvmHookOrThrow().specOrThrow()
+                : install.lambdaEvmHookOrThrow().specOrThrow();
+        final var state = EvmHookState.newBuilder()
+                .hookId(hookId)
+                .type(type)
+                .extensionPoint(install.extensionPoint())
+                .hookContractId(evmHookSpec.contractIdOrThrow())
+                .defaultGasLimit(evmHookSpec.defaultGasLimit())
+                .chargingSpec(install.chargingSpecOrThrow())
+                .deleted(false)
+                .firstContractStorageKey(Bytes.EMPTY)
+                .previousIndex(0L)
                 .nextIndex(nextIndex)
+                .numStorageSlots(0)
                 .build();
-        lambdaStates.put(lambdaId, state);
-        if (!installation.initialStorageSlots().isEmpty()) {
-            updateSlots(lambdaId, installation.initialStorageSlots());
+        hookStates.put(hookId, state);
+        if (type == EvmHookType.LAMBDA) {
+            final var initialStorageSlots = install.lambdaEvmHookOrThrow().storageSlots();
+            if (!initialStorageSlots.isEmpty()) {
+                updateSlots(hookId, initialStorageSlots);
+            }
         }
         entityCounters.incrementEntityTypeCount(LAMBDA);
     }

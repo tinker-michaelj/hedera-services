@@ -291,16 +291,17 @@ Once a hook is installed to an entity, a transaction generally references it by 
 The details of the call are specified based on its type; for example, EVM hook calls are specified by an `EvmHookCall`
 message that gives optional call data and gas limit.
 
-If the called hook does not match the given call specification, the network will fail the transaction with 
-`BAD_HOOK_REQUEST`. If there is no hook installed at the specified index, the network will fail the transaction 
+If the called hook does not match the given call specification, the network will fail the transaction with
+`BAD_HOOK_REQUEST`. If there is no hook installed at the specified index, the network will fail the transaction
 with `HOOK_NOT_FOUND`.
+
 ```protobuf
 /**
  * Specifies a call to a hook from within a transaction where
  * the hook owner is implied by the point of use. (For example,
  * it would never make sense to try to use an account allowance
- * hook for account 0.0.X inside an AccountAmount for account 
- * 0.0.Y; hence we only need to give the index of which of 
+ * hook for account 0.0.X inside an AccountAmount for account
+ * 0.0.Y; hence we only need to give the index of which of
  * 0.0.Y's hooks we want to call.)
  */
 message HookCall {
@@ -339,6 +340,7 @@ message EvmHookCall {
 ### Core system protobufs
 
 Once a hook is installed, it has an id in the network state.
+
 ```protobuf
 /**
  * Once a hook is installed, its id.
@@ -370,6 +372,6 @@ message HookInstallerId {
 
 EVM hooks will be implemented by internal dispatch from each installing entity type's service to the `ContractService`.
 (Here also, a hook with a different programming model would require very different implementation details, so we focus
-on EVM hooks.) 
+on EVM hooks.)
 
 The dispatch for executing EVM hooks is a new `HookDispatchTransactionBody` with a choice of three actions.

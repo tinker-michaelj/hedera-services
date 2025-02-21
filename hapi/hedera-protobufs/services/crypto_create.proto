@@ -35,7 +35,7 @@ option java_multiple_files = true;
 
 import "basic_types.proto";
 import "duration.proto";
-import "lambda.proto";
+import "hook_types.proto";
 
 /*
  * Create a new account.
@@ -216,7 +216,7 @@ message CryptoCreateTransactionBody {
     bytes alias = 18;
 
     /**
-     * The lambdas to install immediately after creating this account.
+     * The hook installs to run immediately after creating this account.
      */
-    repeated LambdaInstallation lambda_installations = 19;
+    repeated HookInstall hook_installs = 19;
 }

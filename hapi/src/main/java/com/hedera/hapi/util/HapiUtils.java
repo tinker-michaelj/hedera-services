@@ -1,19 +1,4 @@
-/*
- * Copyright (C) 2023-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.hapi.util;
 
 import static java.util.Objects.requireNonNull;
@@ -197,7 +182,7 @@ public class HapiUtils {
             case CRYPTO_TRANSFER -> HederaFunctionality.CRYPTO_TRANSFER;
             case ETHEREUM_TRANSACTION -> HederaFunctionality.ETHEREUM_TRANSACTION;
             case LAMBDA_SSTORE -> HederaFunctionality.LAMBDA_S_STORE;
-            case HOOK_DISPATCH -> HederaFunctionality.HOOK_DISPATCH;
+            case EVM_HOOK_DISPATCH -> HederaFunctionality.EVM_HOOK_DISPATCH;
             case FILE_APPEND -> HederaFunctionality.FILE_APPEND;
             case FILE_CREATE -> HederaFunctionality.FILE_CREATE;
             case FILE_UPDATE -> HederaFunctionality.FILE_UPDATE;

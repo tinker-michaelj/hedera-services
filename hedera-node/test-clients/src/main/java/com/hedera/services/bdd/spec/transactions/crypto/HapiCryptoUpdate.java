@@ -1,19 +1,4 @@
-/*
- * Copyright (C) 2020-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.services.bdd.spec.transactions.crypto;
 
 import static com.hedera.services.bdd.spec.PropertySource.asAccountString;
@@ -42,7 +27,7 @@ import com.hedera.services.bdd.spec.queries.crypto.HapiGetAccountInfo;
 import com.hedera.services.bdd.spec.queries.crypto.ReferenceType;
 import com.hedera.services.bdd.spec.transactions.HapiTxnOp;
 import com.hedera.services.bdd.spec.transactions.TxnUtils;
-import com.hedera.services.bdd.spec.transactions.lambda.LambdaInstaller;
+import com.hedera.services.bdd.spec.transactions.lambda.HookInstaller;
 import com.hedera.services.bdd.suites.HapiSuite;
 import com.hederahashgraph.api.proto.java.AccountID;
 import com.hederahashgraph.api.proto.java.CryptoGetInfoResponse;
@@ -86,7 +71,7 @@ public class HapiCryptoUpdate extends HapiTxnOp<HapiCryptoUpdate> {
     private Optional<Boolean> isDeclinedReward = Optional.empty();
 
     private ReferenceType referenceType = ReferenceType.REGISTRY_NAME;
-    private final List<LambdaInstaller> lambdaInstallers = new ArrayList<>();
+    private final List<HookInstaller> hookInstallers = new ArrayList<>();
 
     public HapiCryptoUpdate(String account) {
         this.account = account;
@@ -241,9 +226,9 @@ public class HapiCryptoUpdate extends HapiTxnOp<HapiCryptoUpdate> {
                                 builder.setStakedNodeId(newStakedNodeId.get());
                             }
                             isDeclinedReward.ifPresent(b -> builder.setDeclineReward(BoolValue.of(b)));
-                            lambdaInstallers.forEach(installer -> {
+                            hookInstallers.forEach(installer -> {
                                 allRunFor(spec, installer.specSetupOp());
-                                builder.addLambdaInstallations(CommonPbjConverters.fromPbj(installer.op()));
+                                builder.addHookInstalls(CommonPbjConverters.fromPbj(installer.op()));
                             });
                         });
         if (logUpdateDetailsToSysout) {
