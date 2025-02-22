@@ -55,6 +55,7 @@ import com.hedera.node.app.service.schedule.impl.WritableScheduleStoreImpl;
 import com.hedera.node.app.service.token.TokenService;
 import com.hedera.node.app.service.token.impl.WritableNetworkStakingRewardsStore;
 import com.hedera.node.app.service.token.impl.WritableStakingInfoStore;
+import com.hedera.node.app.service.token.impl.handlers.FinalizeRecordHandler;
 import com.hedera.node.app.service.token.impl.handlers.staking.StakeInfoHelper;
 import com.hedera.node.app.service.token.impl.handlers.staking.StakePeriodManager;
 import com.hedera.node.app.service.token.records.CryptoTransferStreamBuilder;
@@ -686,7 +687,15 @@ public class HandleWorkflow {
                     }
                 }
                 hollowAccountCompletions.completeHollowAccounts(userTxn, dispatch);
+                // <PLEX>
+                if (userTxn.type() == GENESIS_TRANSACTION) {
+                    FinalizeRecordHandler.SKIP_CHILD_RECONCILIATION.set(true);
+                }
+                // </PLEX>
                 dispatchProcessor.processDispatch(dispatch);
+                // <PLEX>
+                FinalizeRecordHandler.SKIP_CHILD_RECONCILIATION.set(false);
+                // </PLEX>
                 updateWorkflowMetrics(userTxn);
             }
             final var handleOutput =

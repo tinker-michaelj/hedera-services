@@ -16,13 +16,6 @@
 
 package com.hedera.node.app.service.token.impl.handlers;
 
-import static com.hedera.hapi.node.base.ResponseCodeEnum.FAIL_INVALID;
-import static com.hedera.node.app.service.token.impl.comparator.TokenComparators.TOKEN_TRANSFER_LIST_COMPARATOR;
-import static com.hedera.node.app.service.token.impl.handlers.BaseCryptoHandler.asAccount;
-import static com.hedera.node.app.service.token.impl.handlers.staking.StakingRewardsHelper.asAccountAmounts;
-import static com.hedera.node.app.service.token.impl.handlers.staking.StakingRewardsHelper.requiresExternalization;
-import static java.util.Collections.emptyList;
-
 import com.hedera.hapi.node.base.AccountAmount;
 import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.HederaFunctionality;
@@ -49,15 +42,24 @@ import com.hedera.node.config.data.LedgerConfig;
 import com.hedera.node.config.data.StakingConfig;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+
+import static com.hedera.hapi.node.base.ResponseCodeEnum.FAIL_INVALID;
+import static com.hedera.node.app.service.token.impl.comparator.TokenComparators.TOKEN_TRANSFER_LIST_COMPARATOR;
+import static com.hedera.node.app.service.token.impl.handlers.BaseCryptoHandler.asAccount;
+import static com.hedera.node.app.service.token.impl.handlers.staking.StakingRewardsHelper.asAccountAmounts;
+import static com.hedera.node.app.service.token.impl.handlers.staking.StakingRewardsHelper.requiresExternalization;
+import static java.util.Collections.emptyList;
 
 /**
  * This class is used to "finalize" hbar and token transfers for the parent transaction record.
@@ -66,6 +68,10 @@ import org.apache.logging.log4j.Logger;
 public class FinalizeRecordHandler extends RecordFinalizerBase {
     private static final Logger logger = LogManager.getLogger(FinalizeRecordHandler.class);
     public static final long LEDGER_TOTAL_TINY_BAR_FLOAT = 5000000000000000000L;
+
+    // <PLEX>
+    public static final AtomicBoolean SKIP_CHILD_RECONCILIATION = new AtomicBoolean(false);
+    // </PLEX>
 
     private final StakingRewardsHandler stakingRewardsHandler;
     private final HederaConfig hederaConfig;
@@ -150,7 +156,9 @@ public class FinalizeRecordHandler extends RecordFinalizerBase {
         // represent the changes for Mint or Wipe of NFTs in the token relation changes.
         final var nftChanges = nftChangesFrom(writableNftStore, writableTokenStore, tokenRelChanges);
 
-        if (context.hasChildOrPrecedingRecords()) {
+        // <PLEX>
+        if (context.hasChildOrPrecedingRecords() && !SKIP_CHILD_RECONCILIATION.get()) {
+            // </PLEX>
             // All the above changes maps are mutable
             deductChangesFromChildOrPrecedingRecords(context, tokenRelChanges, nftChanges, hbarChanges);
         }

@@ -16,31 +16,6 @@
 
 package com.hedera.node.app.service.consensus.impl.handlers;
 
-import static com.hedera.hapi.node.base.ResponseCodeEnum.DUPLICATE_ACCOUNT_ID_IN_MAX_CUSTOM_FEE_LIST;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.DUPLICATE_DENOMINATION_IN_MAX_CUSTOM_FEE_LIST;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_CHUNK_NUMBER;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_CHUNK_TRANSACTION_ID;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_SUBMIT_KEY;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TOPIC_ID;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TOPIC_MESSAGE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TRANSACTION;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.MAX_CUSTOM_FEE_LIMIT_EXCEEDED;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.MESSAGE_SIZE_TOO_LARGE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.NO_VALID_MAX_CUSTOM_FEE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS;
-import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.BASIC_ENTITY_ID_SIZE;
-import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.LONG_SIZE;
-import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.RECEIPT_STORAGE_TIME_SEC;
-import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.TX_HASH_SIZE;
-import static com.hedera.node.app.spi.validation.Validations.mustExist;
-import static com.hedera.node.app.spi.workflows.DispatchOptions.stepDispatch;
-import static com.hedera.node.app.spi.workflows.HandleContext.DispatchMetadata.Type.TRANSACTION_FIXED_FEE;
-import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
-import static com.hedera.node.app.spi.workflows.PreCheckException.validateFalsePreCheck;
-import static com.hedera.node.app.spi.workflows.PreCheckException.validateTruePreCheck;
-import static com.hedera.node.app.spi.workflows.record.StreamBuilder.TransactionCustomizer.SUPPRESSING_TRANSACTION_CUSTOMIZER;
-import static java.util.Objects.requireNonNull;
-
 import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.HederaFunctionality;
 import com.hedera.hapi.node.base.Key;
@@ -77,6 +52,11 @@ import com.hedera.node.config.data.ConsensusConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
@@ -92,8 +72,31 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+
+import static com.hedera.hapi.node.base.ResponseCodeEnum.DUPLICATE_ACCOUNT_ID_IN_MAX_CUSTOM_FEE_LIST;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.DUPLICATE_DENOMINATION_IN_MAX_CUSTOM_FEE_LIST;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_CHUNK_NUMBER;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_CHUNK_TRANSACTION_ID;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_SUBMIT_KEY;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TOPIC_ID;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TOPIC_MESSAGE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TRANSACTION;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.MAX_CUSTOM_FEE_LIMIT_EXCEEDED;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.MESSAGE_SIZE_TOO_LARGE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.NO_VALID_MAX_CUSTOM_FEE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS;
+import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.BASIC_ENTITY_ID_SIZE;
+import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.LONG_SIZE;
+import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.RECEIPT_STORAGE_TIME_SEC;
+import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.TX_HASH_SIZE;
+import static com.hedera.node.app.spi.validation.Validations.mustExist;
+import static com.hedera.node.app.spi.workflows.DispatchOptions.stepDispatch;
+import static com.hedera.node.app.spi.workflows.HandleContext.DispatchMetadata.Type.TRANSACTION_FIXED_FEE;
+import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
+import static com.hedera.node.app.spi.workflows.PreCheckException.validateFalsePreCheck;
+import static com.hedera.node.app.spi.workflows.PreCheckException.validateTruePreCheck;
+import static com.hedera.node.app.spi.workflows.record.StreamBuilder.TransactionCustomizer.SUPPRESSING_TRANSACTION_CUSTOMIZER;
+import static java.util.Objects.requireNonNull;
 
 /**
  * This class contains all workflow-related functionality regarding
@@ -101,6 +104,8 @@ import javax.inject.Singleton;
  */
 @Singleton
 public class ConsensusSubmitMessageHandler implements TransactionHandler {
+    private static final Logger logger = LogManager.getLogger(ConsensusSubmitMessageHandler.class);
+
     /**
      * Running hash version
      */
@@ -190,6 +195,8 @@ public class ConsensusSubmitMessageHandler implements TransactionHandler {
                     .topicRunningHash(updatedTopic.runningHash())
                     .topicSequenceNumber(updatedTopic.sequenceNumber())
                     .topicRunningHashVersion(RUNNING_HASH_VERSION);
+
+            logger.info("Sent message '{}' to 0.0.{}", new String(op.message().toByteArray()), updatedTopic.topicIdOrThrow().topicNum());
         } catch (IOException e) {
             throw new HandleException(INVALID_TRANSACTION);
         }
