@@ -1,19 +1,4 @@
-/*
- * Copyright (C) 2022-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.service.token.impl.handlers;
 
 import static com.hedera.hapi.node.base.ResponseCodeEnum.ACCOUNT_DELETED;
@@ -65,12 +50,11 @@ import static java.util.Objects.requireNonNull;
 import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.Duration;
 import com.hedera.hapi.node.base.HederaFunctionality;
+import com.hedera.hapi.node.base.HookInstallerId;
 import com.hedera.hapi.node.base.Key;
-import com.hedera.hapi.node.base.LambdaID;
-import com.hedera.hapi.node.base.LambdaOwnerID;
 import com.hedera.hapi.node.base.SubType;
-import com.hedera.hapi.node.lambda.LambdaCreation;
-import com.hedera.hapi.node.lambda.LambdaDispatchTransactionBody;
+import com.hedera.hapi.node.hooks.HookInstallation;
+import com.hedera.hapi.node.lambda.HookDispatchTransactionBody;
 import com.hedera.hapi.node.state.token.Account;
 import com.hedera.hapi.node.token.CryptoCreateTransactionBody;
 import com.hedera.hapi.node.token.CryptoUpdateTransactionBody;
@@ -301,25 +285,19 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
             }
         }
 
-        long lastIndex = 0L;
-        long defaultIndex = 1L;
-        for (final var installation : op.lambdaInstallations()) {
-            final long index = installation.hasIndex() ? installation.indexOrThrow() : defaultIndex++;
-            final LambdaID lambdaId = LambdaID.newBuilder()
-                    .ownerId(LambdaOwnerID.newBuilder()
-                            .accountId(createdAccountID)
-                            .build())
-                    .index(index)
-                    .build();
+        long nextIndex = 0;
+        for (final var install : op.hookInstalls()) {
+            final var installerId =
+                    HookInstallerId.newBuilder().accountId(createdAccountID).build();
             final var body = TransactionBody.newBuilder()
-                    .lambdaDispatch(LambdaDispatchTransactionBody.newBuilder()
-                            .creation(new LambdaCreation(lambdaId, installation, lastIndex))
+                    .evmHookDispatch(HookDispatchTransactionBody.newBuilder()
+                            .installation(new HookInstallation(installerId, install, nextIndex))
                             .build())
                     .build();
             final var dispatchBuilder = context.dispatch(DispatchOptions.stepDispatch(
                     context.payer(), body, StreamBuilder.class, NOOP_TRANSACTION_CUSTOMIZER));
             validateSuccess(dispatchBuilder.status());
-            lastIndex = index;
+            nextIndex = install.index();
         }
     }
 

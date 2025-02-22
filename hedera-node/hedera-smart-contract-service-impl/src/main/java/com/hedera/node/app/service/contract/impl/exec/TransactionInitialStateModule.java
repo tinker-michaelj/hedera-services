@@ -1,27 +1,12 @@
-/*
- * Copyright (C) 2023-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.service.contract.impl.exec;
 
-import static com.hedera.hapi.node.base.HederaFunctionality.LAMBDA_DISPATCH;
+import static com.hedera.hapi.node.base.HederaFunctionality.EVM_HOOK_DISPATCH;
 
 import com.hedera.hapi.node.base.HederaFunctionality;
 import com.hedera.node.app.service.contract.impl.annotations.InitialState;
 import com.hedera.node.app.service.contract.impl.annotations.TransactionScope;
-import com.hedera.node.app.service.contract.impl.state.ReadableLambdaStore;
+import com.hedera.node.app.service.contract.impl.state.ReadableEvmHookStore;
 import com.hedera.node.app.service.file.ReadableFileStore;
 import com.hedera.node.app.service.token.ReadableAccountStore;
 import com.hedera.node.app.service.token.api.TokenServiceApi;
@@ -51,9 +36,9 @@ public interface TransactionInitialStateModule {
     @Nullable
     @InitialState
     @TransactionScope
-    static ReadableLambdaStore provideInitialLambdaStore(
+    static ReadableEvmHookStore provideInitialEvmHookStore(
             @NonNull final HandleContext context, @NonNull final HederaFunctionality function) {
-        return function == LAMBDA_DISPATCH ? context.storeFactory().readableStore(ReadableLambdaStore.class) : null;
+        return function == EVM_HOOK_DISPATCH ? context.storeFactory().readableStore(ReadableEvmHookStore.class) : null;
     }
 
     @Provides

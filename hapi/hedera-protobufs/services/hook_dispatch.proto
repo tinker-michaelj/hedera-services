@@ -27,64 +27,43 @@ option java_package = "com.hederahashgraph.api.proto.java";
 option java_multiple_files = true;
 
 import "basic_types.proto";
-import "lambda.proto";
+import "hook_types.proto";
 
 /**
- * Specifies the creation of a new lambda at a specific id; the
- * id must not exist.
+ * Dispatches a hook action to an appropriate service.
  */
-message LambdaCreation {
-  /**
-   * The id of the lambda.
-   */
-  LambdaID lambda_id = 1;
+message HookDispatchTransactionBody {
+  oneof action {
+    /**
+     * The id of the hook to uninstall.
+     */
+    HookId hook_id_to_uninstall = 1;
 
-  /**
-   * The installation details.
-   */
-  LambdaInstallation installation = 2;
+    /**
+     * The installation of a new hook.
+     */
+    HookInstallation installation = 2;
 
-  /**
-   * The index of the lambda the new installation should be previous
-   * to in the owner's doubly-linked list of lambdas.
-   */
-  uint64 next_lambda_index = 3;
+    /**
+     * An execution of an installed hook.
+     */
+    HookExecution execution = 3;
+  }
 }
 
 /**
- * Specifies the execution of a lambda by its owner id and
+ * Specifies the execution of a hook by its installer id and
  * the details of the call (which includes the index).
  */
-message LambdaExecution {
+message HookExecution {
   /**
-   * The id of the lambda's owner.
+   * The id of the hook's installer.
    */
-  LambdaOwnerID owner_id = 1;
+  HookInstallerId installer_id = 1;
 
   /**
    * The call details.
    */
-  LambdaCall call = 2;
+  HookCall call = 2;
 }
 
-/**
- * Dispatches a lambda action to the ContractService.
- */
-message LambdaDispatchTransactionBody {
-  oneof action {
-    /**
-     * The id of the lambda to delete.
-     */
-    LambdaID lambda_id_to_delete = 1;
-
-    /**
-     * The creation of a new lambda.
-     */
-    LambdaCreation creation = 2;
-
-    /**
-     * A call to an existing lambda.
-     */
-    LambdaExecution execution = 3;
-  }
-}

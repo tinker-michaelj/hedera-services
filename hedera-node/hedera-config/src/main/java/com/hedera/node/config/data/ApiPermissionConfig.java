@@ -1,19 +1,4 @@
-/*
- * Copyright (C) 2023-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.config.data;
 
 import static com.hedera.hapi.node.base.HederaFunctionality.CONSENSUS_CREATE_TOPIC;
@@ -40,6 +25,7 @@ import static com.hedera.hapi.node.base.HederaFunctionality.CRYPTO_GET_INFO;
 import static com.hedera.hapi.node.base.HederaFunctionality.CRYPTO_TRANSFER;
 import static com.hedera.hapi.node.base.HederaFunctionality.CRYPTO_UPDATE;
 import static com.hedera.hapi.node.base.HederaFunctionality.ETHEREUM_TRANSACTION;
+import static com.hedera.hapi.node.base.HederaFunctionality.EVM_HOOK_DISPATCH;
 import static com.hedera.hapi.node.base.HederaFunctionality.FILE_APPEND;
 import static com.hedera.hapi.node.base.HederaFunctionality.FILE_CREATE;
 import static com.hedera.hapi.node.base.HederaFunctionality.FILE_DELETE;
@@ -55,7 +41,6 @@ import static com.hedera.hapi.node.base.HederaFunctionality.HINTS_PREPROCESSING_
 import static com.hedera.hapi.node.base.HederaFunctionality.HISTORY_ASSEMBLY_SIGNATURE;
 import static com.hedera.hapi.node.base.HederaFunctionality.HISTORY_PROOF_KEY_PUBLICATION;
 import static com.hedera.hapi.node.base.HederaFunctionality.HISTORY_PROOF_VOTE;
-import static com.hedera.hapi.node.base.HederaFunctionality.LAMBDA_DISPATCH;
 import static com.hedera.hapi.node.base.HederaFunctionality.LAMBDA_S_STORE;
 import static com.hedera.hapi.node.base.HederaFunctionality.NETWORK_GET_EXECUTION_TIME;
 import static com.hedera.hapi.node.base.HederaFunctionality.NODE_CREATE;
@@ -282,7 +267,7 @@ public record ApiPermissionConfig(
         @ConfigProperty(defaultValue = "0-0") PermissionedAccountsRange historyAssemblySignature,
         @ConfigProperty(defaultValue = "0-0") PermissionedAccountsRange historyProofVote,
         @ConfigProperty(defaultValue = "0-0") PermissionedAccountsRange crsPublication,
-        @ConfigProperty(defaultValue = "0-0") PermissionedAccountsRange lambdaDispatch,
+        @ConfigProperty(defaultValue = "0-0") PermissionedAccountsRange evmHookDispatch,
         @ConfigProperty(defaultValue = "0-*") PermissionedAccountsRange lambdaSStore) {
 
     private static final EnumMap<HederaFunctionality, Function<ApiPermissionConfig, PermissionedAccountsRange>>
@@ -305,7 +290,7 @@ public record ApiPermissionConfig(
         permissionKeys.put(CONTRACT_CALL, c -> c.contractCallMethod);
         permissionKeys.put(CONTRACT_DELETE, c -> c.deleteContract);
         permissionKeys.put(ETHEREUM_TRANSACTION, c -> c.ethereumTransaction);
-        permissionKeys.put(LAMBDA_DISPATCH, c -> c.lambdaDispatch);
+        permissionKeys.put(EVM_HOOK_DISPATCH, c -> c.evmHookDispatch);
         permissionKeys.put(LAMBDA_S_STORE, c -> c.lambdaSStore);
         permissionKeys.put(CONSENSUS_CREATE_TOPIC, c -> c.createTopic);
         permissionKeys.put(CONSENSUS_UPDATE_TOPIC, c -> c.updateTopic);

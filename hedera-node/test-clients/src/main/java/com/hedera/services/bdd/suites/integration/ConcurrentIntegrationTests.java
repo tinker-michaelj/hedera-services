@@ -1,19 +1,4 @@
-/*
- * Copyright (C) 2024-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.services.bdd.suites.integration;
 
 import static com.hedera.hapi.node.base.ResponseCodeEnum.BUSY;
@@ -27,6 +12,7 @@ import static com.hedera.services.bdd.junit.hedera.embedded.EmbeddedMode.CONCURR
 import static com.hedera.services.bdd.junit.hedera.embedded.SyntheticVersion.PAST;
 import static com.hedera.services.bdd.junit.hedera.utils.AddressBookUtils.CLASSIC_NODE_NAMES;
 import static com.hedera.services.bdd.junit.hedera.utils.AddressBookUtils.classicFeeCollectorIdFor;
+import static com.hedera.services.bdd.spec.HapiPropertySource.asEntityString;
 import static com.hedera.services.bdd.spec.HapiSpec.hapiTest;
 import static com.hedera.services.bdd.spec.keys.TrieSigMapGenerator.uniqueWithFullPrefixesFor;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getAccountBalance;
@@ -135,7 +121,7 @@ public class ConcurrentIntegrationTests {
                 blockStreamMustIncludePassFrom(spec -> blockWithResultOf(BUSY)),
                 cryptoCreate("somebody").balance(0L),
                 cryptoTransfer(tinyBarsFromTo(GENESIS, "somebody", ONE_HBAR))
-                        .setNode("0.0.4")
+                        .setNode(asEntityString(4))
                         .withSubmissionStrategy(usingVersion(PAST))
                         .hasKnownStatus(com.hederahashgraph.api.proto.java.ResponseCodeEnum.BUSY),
                 getAccountBalance("somebody").hasTinyBars(0L),
@@ -148,7 +134,7 @@ public class ConcurrentIntegrationTests {
     final Stream<DynamicTest> completelySkipsTransactionFromUnknownNode() {
         return hapiTest(
                 cryptoTransfer(tinyBarsFromTo(GENESIS, FUNDING, ONE_HBAR))
-                        .setNode("0.0.666")
+                        .setNode(asEntityString(666))
                         .via("toBeSkipped")
                         .withSubmissionStrategy(usingVersion(SyntheticVersion.PRESENT))
                         .hasAnyStatusAtAll(),

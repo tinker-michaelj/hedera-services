@@ -27,16 +27,16 @@ option java_package = "com.hederahashgraph.api.proto.java";
 option java_multiple_files = true;
 
 import "basic_types.proto";
-import "lambda.proto";
+import "hook_types.proto";
 
 /**
  * Adds or removes key/value pairs in the storage of a lambda. The lambda's owning key must sign the transaction.
  */
 message LambdaSStoreTransactionBody {
   /**
-   * The id of the lambda whose storage is being updated.
+   * The id of the lambda EVM hook whose storage is being updated.
    */
-  LambdaID lambda_id = 1;
+  HookId hook_id = 1;
 
   /**
    * The updates to the storage of the lambda.

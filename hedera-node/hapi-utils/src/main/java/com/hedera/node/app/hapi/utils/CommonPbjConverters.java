@@ -1,19 +1,4 @@
-/*
- * Copyright (C) 2024-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.hapi.utils;
 
 import static com.hedera.node.app.hapi.utils.ByteStringUtils.unwrapUnsafelyIfPossible;
@@ -28,9 +13,9 @@ import com.hedera.hapi.node.base.FeeComponents;
 import com.hedera.hapi.node.base.FeeData;
 import com.hedera.hapi.node.base.FileID;
 import com.hedera.hapi.node.base.HederaFunctionality;
+import com.hedera.hapi.node.base.HookCall;
 import com.hedera.hapi.node.base.Key;
 import com.hedera.hapi.node.base.KeyList;
-import com.hedera.hapi.node.base.LambdaCall;
 import com.hedera.hapi.node.base.ResponseCodeEnum;
 import com.hedera.hapi.node.base.ResponseType;
 import com.hedera.hapi.node.base.ServiceEndpoint;
@@ -38,7 +23,7 @@ import com.hedera.hapi.node.base.SubType;
 import com.hedera.hapi.node.base.Timestamp;
 import com.hedera.hapi.node.base.TokenID;
 import com.hedera.hapi.node.base.Transaction;
-import com.hedera.hapi.node.lambda.LambdaInstallation;
+import com.hedera.hapi.node.hooks.HookInstall;
 import com.hedera.hapi.node.scheduled.SchedulableTransactionBody;
 import com.hedera.hapi.node.scheduled.ScheduleInfo;
 import com.hedera.hapi.node.state.common.EntityNumber;
@@ -137,22 +122,22 @@ public class CommonPbjConverters {
         }
     }
 
-    public static @NonNull com.hederahashgraph.api.proto.java.LambdaCall fromPbj(@NonNull final LambdaCall lambdaCall) {
-        requireNonNull(lambdaCall);
+    public static @NonNull com.hederahashgraph.api.proto.java.HookCall fromPbj(@NonNull final HookCall hookCall) {
+        requireNonNull(hookCall);
         try {
-            final var bytes = asBytes(LambdaCall.PROTOBUF, lambdaCall);
-            return com.hederahashgraph.api.proto.java.LambdaCall.parseFrom(bytes);
+            final var bytes = asBytes(HookCall.PROTOBUF, hookCall);
+            return com.hederahashgraph.api.proto.java.HookCall.parseFrom(bytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static @NonNull com.hederahashgraph.api.proto.java.LambdaInstallation fromPbj(
-            @NonNull final LambdaInstallation lambdaInstallation) {
-        requireNonNull(lambdaInstallation);
+    public static @NonNull com.hederahashgraph.api.proto.java.HookInstall fromPbj(
+            @NonNull final HookInstall hookInstall) {
+        requireNonNull(hookInstall);
         try {
-            final var bytes = asBytes(LambdaInstallation.PROTOBUF, lambdaInstallation);
-            return com.hederahashgraph.api.proto.java.LambdaInstallation.parseFrom(bytes);
+            final var bytes = asBytes(HookInstall.PROTOBUF, hookInstall);
+            return com.hederahashgraph.api.proto.java.HookInstall.parseFrom(bytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

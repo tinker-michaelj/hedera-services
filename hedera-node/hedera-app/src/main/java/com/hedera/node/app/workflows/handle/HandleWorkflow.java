@@ -1,20 +1,32 @@
-/*
- * Copyright (C) 2024-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.workflows.handle;
+
+import static com.hedera.hapi.node.base.ResponseCodeEnum.BUSY;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.FAIL_INVALID;
+import static com.hedera.hapi.util.HapiUtils.asTimestamp;
+import static com.hedera.node.app.ids.schemas.V0590EntityIdSchema.ENTITY_COUNTS_KEY;
+import static com.hedera.node.app.records.schemas.V0490BlockRecordSchema.BLOCK_INFO_STATE_KEY;
+import static com.hedera.node.app.spi.workflows.DispatchOptions.independentDispatch;
+import static com.hedera.node.app.spi.workflows.HandleContext.TransactionCategory.SCHEDULED;
+import static com.hedera.node.app.spi.workflows.HandleContext.TransactionCategory.USER;
+import static com.hedera.node.app.spi.workflows.record.StreamBuilder.ReversingBehavior.REVERSIBLE;
+import static com.hedera.node.app.spi.workflows.record.StreamBuilder.TransactionCustomizer.NOOP_TRANSACTION_CUSTOMIZER;
+import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartEvent;
+import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartRound;
+import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartUserTransaction;
+import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartUserTransactionPreHandleResultP2;
+import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartUserTransactionPreHandleResultP3;
+import static com.hedera.node.app.state.merkle.VersionUtils.isSoOrdered;
+import static com.hedera.node.app.workflows.handle.TransactionType.GENESIS_TRANSACTION;
+import static com.hedera.node.app.workflows.handle.TransactionType.ORDINARY_TRANSACTION;
+import static com.hedera.node.app.workflows.handle.TransactionType.POST_UPGRADE_TRANSACTION;
+import static com.hedera.node.app.workflows.handle.steps.StakePeriodChanges.isNextSecond;
+import static com.hedera.node.config.types.StreamMode.BLOCKS;
+import static com.hedera.node.config.types.StreamMode.BOTH;
+import static com.hedera.node.config.types.StreamMode.RECORDS;
+import static com.swirlds.platform.system.InitTrigger.EVENT_STREAM_RECOVERY;
+import static com.swirlds.state.lifecycle.HapiUtils.SEMANTIC_VERSION_COMPARATOR;
+import static java.util.Objects.requireNonNull;
 
 import com.hedera.hapi.block.stream.BlockItem;
 import com.hedera.hapi.block.stream.input.EventHeader;
@@ -97,44 +109,16 @@ import com.swirlds.state.spi.CommittableWritableStates;
 import com.swirlds.state.spi.WritableStates;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
-import static com.hedera.hapi.node.base.ResponseCodeEnum.BUSY;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.FAIL_INVALID;
-import static com.hedera.hapi.util.HapiUtils.asTimestamp;
-import static com.hedera.node.app.ids.schemas.V0590EntityIdSchema.ENTITY_COUNTS_KEY;
-import static com.hedera.node.app.records.schemas.V0490BlockRecordSchema.BLOCK_INFO_STATE_KEY;
-import static com.hedera.node.app.spi.workflows.DispatchOptions.independentDispatch;
-import static com.hedera.node.app.spi.workflows.HandleContext.TransactionCategory.SCHEDULED;
-import static com.hedera.node.app.spi.workflows.HandleContext.TransactionCategory.USER;
-import static com.hedera.node.app.spi.workflows.record.StreamBuilder.ReversingBehavior.REVERSIBLE;
-import static com.hedera.node.app.spi.workflows.record.StreamBuilder.TransactionCustomizer.NOOP_TRANSACTION_CUSTOMIZER;
-import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartEvent;
-import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartRound;
-import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartUserTransaction;
-import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartUserTransactionPreHandleResultP2;
-import static com.hedera.node.app.state.logging.TransactionStateLogger.logStartUserTransactionPreHandleResultP3;
-import static com.hedera.node.app.state.merkle.VersionUtils.isSoOrdered;
-import static com.hedera.node.app.workflows.handle.TransactionType.GENESIS_TRANSACTION;
-import static com.hedera.node.app.workflows.handle.TransactionType.ORDINARY_TRANSACTION;
-import static com.hedera.node.app.workflows.handle.TransactionType.POST_UPGRADE_TRANSACTION;
-import static com.hedera.node.app.workflows.handle.steps.StakePeriodChanges.isNextSecond;
-import static com.hedera.node.config.types.StreamMode.BLOCKS;
-import static com.hedera.node.config.types.StreamMode.BOTH;
-import static com.hedera.node.config.types.StreamMode.RECORDS;
-import static com.swirlds.platform.system.InitTrigger.EVENT_STREAM_RECOVERY;
-import static com.swirlds.state.lifecycle.HapiUtils.SEMANTIC_VERSION_COMPARATOR;
-import static java.util.Objects.requireNonNull;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * The handle workflow that is responsible for handling the next {@link Round} of transactions.
@@ -326,16 +310,13 @@ public class HandleWorkflow {
             for (final var it = event.consensusTransactionIterator(); it.hasNext(); ) {
                 final var platformTxn = it.next();
                 try {
-                    // skip system transactions
-                    if (!platformTxn.isSystem()) {
-                        userTransactionsHandled |= handlePlatformTransaction(
-                                state,
-                                creator,
-                                platformTxn,
-                                event.getSoftwareVersion(),
-                                simplifiedStateSignatureTxnCallback,
-                                userTransactionsHandled);
-                    }
+                    userTransactionsHandled |= handlePlatformTransaction(
+                            state,
+                            creator,
+                            platformTxn,
+                            event.getSoftwareVersion(),
+                            simplifiedStateSignatureTxnCallback,
+                            userTransactionsHandled);
                 } catch (final Exception e) {
                     logger.fatal(
                             "Possibly CATASTROPHIC failure while running the handle workflow. "
@@ -518,7 +499,11 @@ public class HandleWorkflow {
                     }
                 }
                 executionEnd = executableTxn.nbf();
-                doStreamingKVChanges(writableStates, entityIdWritableStates, executionEnd, iter::remove);
+                doStreamingKVChanges(
+                        writableStates,
+                        entityIdWritableStates,
+                        boundaryStateChangeListener.lastConsensusTimeOrThrow(),
+                        iter::remove);
                 nextTime = boundaryStateChangeListener
                         .lastConsensusTimeOrThrow()
                         .plusNanos(consensusConfig.handleMaxPrecedingRecords() + 1);
@@ -527,7 +512,11 @@ public class HandleWorkflow {
             // The purgeUntilNext() iterator extension purges any schedules with wait_until_expiry=false
             // that expire after the last schedule returned from next(), until either the next executable
             // schedule or the iterator boundary is reached
-            doStreamingKVChanges(writableStates, entityIdWritableStates, executionEnd, iter::purgeUntilNext);
+            doStreamingKVChanges(
+                    writableStates,
+                    entityIdWritableStates,
+                    boundaryStateChangeListener.lastConsensusTimeOrThrow(),
+                    iter::purgeUntilNext);
             // If the iterator is not exhausted, we can only mark the second _before_ the last-executed NBF time
             // as complete; if it is exhausted, we mark the rightmost second of the interval as complete
             if (iter.hasNext()) {
@@ -652,28 +641,30 @@ public class HandleWorkflow {
                     if (userTxn.type() == GENESIS_TRANSACTION) {
                         logger.info("Doing genesis setup @ {}", userTxn.consensusNow());
                         // <PLEX>
-                        final var treasuryId = AccountID.newBuilder().accountNum(2L).build();
-                        final var sysAdminId = AccountID.newBuilder().accountNum(50L).build();
+                        final var treasuryId =
+                                AccountID.newBuilder().accountNum(2L).build();
+                        final var sysAdminId =
+                                AccountID.newBuilder().accountNum(50L).build();
                         final long amount = 10_000_000_000L * 100_000_000L;
-                        dispatch.handleContext().dispatch(independentDispatch(
-                                treasuryId,
-                                TransactionBody.newBuilder()
-                                        .cryptoTransfer(CryptoTransferTransactionBody.newBuilder()
-                                                .transfers(TransferList.newBuilder()
-                                                        .accountAmounts(List.of(
-                                                            AccountAmount.newBuilder()
-                                                                    .accountID(treasuryId)
-                                                                    .amount(-amount)
-                                                                    .build(),
-                                                            AccountAmount.newBuilder()
-                                                                    .accountID(sysAdminId)
-                                                                    .amount(+amount)
-                                                                    .build()
-                                                        ))
+                        dispatch.handleContext()
+                                .dispatch(independentDispatch(
+                                        treasuryId,
+                                        TransactionBody.newBuilder()
+                                                .cryptoTransfer(CryptoTransferTransactionBody.newBuilder()
+                                                        .transfers(TransferList.newBuilder()
+                                                                .accountAmounts(List.of(
+                                                                        AccountAmount.newBuilder()
+                                                                                .accountID(treasuryId)
+                                                                                .amount(-amount)
+                                                                                .build(),
+                                                                        AccountAmount.newBuilder()
+                                                                                .accountID(sysAdminId)
+                                                                                .amount(+amount)
+                                                                                .build()))
+                                                                .build())
                                                         .build())
-                                                .build())
-                                        .build(),
-                                CryptoTransferStreamBuilder.class));
+                                                .build(),
+                                        CryptoTransferStreamBuilder.class));
                         // </PLEX>
                         systemSetup.doGenesisSetup(dispatch);
                     } else if (userTxn.type() == POST_UPGRADE_TRANSACTION) {

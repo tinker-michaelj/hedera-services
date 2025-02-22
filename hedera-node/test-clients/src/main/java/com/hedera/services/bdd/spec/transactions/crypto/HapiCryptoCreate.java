@@ -1,22 +1,8 @@
-/*
- * Copyright (C) 2020-2025 Hedera Hashgraph, LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+// SPDX-License-Identifier: Apache-2.0
 package com.hedera.services.bdd.spec.transactions.crypto;
 
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.explicitFromHeadlong;
+import static com.hedera.services.bdd.spec.HapiPropertySource.asAccountString;
 import static com.hedera.services.bdd.spec.HapiPropertySource.idAsHeadlongAddress;
 import static com.hedera.services.bdd.spec.keys.KeyFactory.KeyType;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.asId;
@@ -42,7 +28,7 @@ import com.hedera.services.bdd.spec.infrastructure.meta.InitialAccountIdentifier
 import com.hedera.services.bdd.spec.keys.SigControl;
 import com.hedera.services.bdd.spec.transactions.HapiTxnOp;
 import com.hedera.services.bdd.spec.transactions.contract.HapiParserUtil;
-import com.hedera.services.bdd.spec.transactions.lambda.LambdaInstaller;
+import com.hedera.services.bdd.spec.transactions.lambda.HookInstaller;
 import com.hederahashgraph.api.proto.java.AccountID;
 import com.hederahashgraph.api.proto.java.CryptoCreateTransactionBody;
 import com.hederahashgraph.api.proto.java.Duration;
@@ -103,7 +89,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
     private boolean setEvmAddressAliasFromKey = false;
     private Optional<ShardID> shardId = Optional.empty();
     private Optional<RealmID> realmId = Optional.empty();
-    private final List<LambdaInstaller> lambdaInstallers = new ArrayList<>();
+    private final List<HookInstaller> lambdaInstallers = new ArrayList<>();
 
     @Override
     public HederaFunctionality type() {
@@ -140,7 +126,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
         return this;
     }
 
-    public HapiCryptoCreate installing(@NonNull final LambdaInstaller installer) {
+    public HapiCryptoCreate installing(@NonNull final HookInstaller installer) {
         Objects.requireNonNull(installer);
         lambdaInstallers.add(installer);
         return this;
@@ -331,7 +317,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
                             b.setDeclineReward(isDeclinedReward);
                             lambdaInstallers.forEach(installer -> {
                                 allRunFor(spec, installer.specSetupOp());
-                                b.addLambdaInstallations(CommonPbjConverters.fromPbj(installer.op()));
+                                b.addHookInstalls(CommonPbjConverters.fromPbj(installer.op()));
                             });
                         });
         return b -> b.setCryptoCreateAccount(opBody);
@@ -367,8 +353,8 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
         if (advertiseCreation) {
             final String banner = "\n\n"
                     + bannerWith(String.format(
-                            "Created account '%s' with id '0.0.%d'.",
-                            account, lastReceipt.getAccountID().getAccountNum()));
+                            "Created account '%s' with id '%s'.",
+                            account, asAccountString(lastReceipt.getAccountID())));
             log.info(banner);
         }
     }
