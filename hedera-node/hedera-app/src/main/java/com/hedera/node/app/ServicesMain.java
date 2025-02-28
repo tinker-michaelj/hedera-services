@@ -49,7 +49,6 @@ import com.swirlds.common.constructable.ConstructableRegistry;
 import com.swirlds.common.constructable.RuntimeConstructable;
 import com.swirlds.common.context.PlatformContext;
 import com.swirlds.common.crypto.CryptographyFactory;
-import com.swirlds.common.crypto.CryptographyHolder;
 import com.swirlds.common.io.filesystem.FileSystemManager;
 import com.swirlds.common.io.utility.RecycleBin;
 import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
@@ -259,7 +258,6 @@ public class ServicesMain implements SwirldMain<MerkleNodeState> {
         // Immediately initialize the cryptography and merkle cryptography factories
         // to avoid using default behavior instead of that defined in platformConfig
         final var cryptography = CryptographyFactory.create();
-        CryptographyHolder.set(cryptography);
         final var merkleCryptography = MerkleCryptographyFactory.create(platformConfig, cryptography);
         MerkleCryptoFactory.set(merkleCryptography);
 
@@ -295,7 +293,6 @@ public class ServicesMain implements SwirldMain<MerkleNodeState> {
                 platformConfig,
                 Time.getCurrent(),
                 metrics,
-                cryptography,
                 FileSystemManager.create(platformConfig),
                 recycleBin,
                 merkleCryptography);
