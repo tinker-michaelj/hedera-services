@@ -53,7 +53,7 @@ public class StateEditor {
         platformContext = PlatformContext.create(configuration);
 
         final DeserializedSignedState deserializedSignedState =
-                SignedStateFileReader.readStateFile(configuration, statePath, DEFAULT_PLATFORM_STATE_FACADE);
+                SignedStateFileReader.readStateFile(statePath, DEFAULT_PLATFORM_STATE_FACADE, platformContext);
 
         try (final ReservedSignedState reservedSignedState = deserializedSignedState.reservedSignedState()) {
             System.out.println("\nLoading state from " + statePath);
@@ -61,7 +61,7 @@ public class StateEditor {
             System.out.println("Hashing state");
             try {
                 MerkleCryptoFactory.getInstance()
-                        .digestTreeAsync(reservedSignedState.get().getState())
+                        .digestTreeAsync(reservedSignedState.get().getState().getRoot())
                         .get();
             } catch (final InterruptedException | ExecutionException e) {
                 Thread.currentThread().interrupt();
@@ -110,7 +110,7 @@ public class StateEditor {
             while (true) {
                 try (final ReservedSignedState reservedSignedState = getState("StateEditor.start()")) {
                     final MerkleTraversable merkleTraversable =
-                            reservedSignedState.get().getState();
+                            reservedSignedState.get().getState().getRoot();
                     target = merkleTraversable.getNodeAtRoute(currentWorkingRoute);
                     break;
                 } catch (final NoSuchElementException e) {
@@ -164,7 +164,7 @@ public class StateEditor {
     public void setCurrentWorkingRoute(final MerkleRoute currentWorkingRoute) {
         try (final ReservedSignedState reservedSignedState = getState("StateEditor.setCurrentWorkingRoute()")) {
             final MerkleTraversable merkleTraversable =
-                    reservedSignedState.get().getState();
+                    reservedSignedState.get().getState().getRoot();
             merkleTraversable.getNodeAtRoute(currentWorkingRoute); // throws if invalid
             this.currentWorkingRoute = currentWorkingRoute;
         }
@@ -201,6 +201,7 @@ public class StateEditor {
                     false,
                     false,
                     DEFAULT_PLATFORM_STATE_FACADE);
+            newSignedState.init(platformContext);
 
             signedState.set(newSignedState, "StateEditor.getSignedStateCopy() 2");
 
@@ -214,7 +215,7 @@ public class StateEditor {
     public MerkleNode getRelativeNode(final String path) {
         try (final ReservedSignedState reservedSignedState = getState("StateEditor.getRelativeNode()")) {
             final MerkleTraversable merkleTraversable =
-                    reservedSignedState.get().getState();
+                    reservedSignedState.get().getState().getRoot();
             return merkleTraversable.getNodeAtRoute(getRelativeRoute(path));
         }
     }
@@ -242,7 +243,7 @@ public class StateEditor {
 
         try (final ReservedSignedState reservedSignedState = signedState.getAndReserve("StateEditor.getParentInfo()")) {
             final MerkleTraversable merkleTraversable =
-                    reservedSignedState.get().getState();
+                    reservedSignedState.get().getState().getRoot();
             final MerkleNode parent = merkleTraversable.getNodeAtRoute(parentPath);
             if (parent == null) {
                 throw new IllegalArgumentException("The node at " + formatRoute(parentPath) + " is null.");

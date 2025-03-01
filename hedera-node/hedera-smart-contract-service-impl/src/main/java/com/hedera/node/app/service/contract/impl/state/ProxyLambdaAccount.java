@@ -16,7 +16,7 @@ import org.hyperledger.besu.evm.Code;
 import org.hyperledger.besu.evm.code.CodeFactory;
 
 public class ProxyLambdaAccount extends AbstractMutableEvmAccount {
-    public static final Address HLS_EVM_ADDRESS = Address.fromHexString("0x16c");
+    public static final Address HHS_EVM_ADDRESS = Address.fromHexString("0x16d");
 
     private final ContractID contractId;
     private final EvmFrameState state;
@@ -28,7 +28,7 @@ public class ProxyLambdaAccount extends AbstractMutableEvmAccount {
 
     @Override
     public Address getAddress() {
-        return HLS_EVM_ADDRESS;
+        return HHS_EVM_ADDRESS;
     }
 
     @Override

@@ -3,7 +3,6 @@ package com.hedera.node.app.service.contract.impl.state;
 
 import static com.hedera.hapi.node.base.ResponseCodeEnum.MAX_ENTITIES_IN_PRICE_REGIME_HAVE_BEEN_CREATED;
 import static com.hedera.node.app.service.contract.impl.exec.scope.HederaNativeOperations.MISSING_ENTITY_NUMBER;
-import static com.hedera.node.app.service.contract.impl.state.ProxyLambdaAccount.HLS_EVM_ADDRESS;
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.aliasFrom;
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.asEvmContractId;
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.asLongZeroAddress;
@@ -63,9 +62,6 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
     @Nullable
     private final WorldUpdater parent;
 
-    @Nullable
-    private ContractID lambdaContractId;
-
     /**
      * The {@link EvmFrameState} managing this {@code ProxyWorldUpdater}'s state.
      */
@@ -113,14 +109,6 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
     }
 
     /**
-     * Sets the contract ID for the in-scope lambda if this is a dispatch.
-     * @param lambdaContractId the contract ID for the in-scope lambda during a dispatch
-     */
-    public void setLambdaContractId(@NonNull final ContractID lambdaContractId) {
-        this.lambdaContractId = requireNonNull(lambdaContractId);
-    }
-
-    /**
      * Returns the pending creation, if any, for this updater.
      *
      * @return the pending creation, if any, for this updater
@@ -152,22 +140,22 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
         return address == null ? null : (HederaEvmAccount) get(address);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public ContractID getHederaContractId(@NonNull final Address address) {
         requireNonNull(address);
-        if (lambdaContractId != null && HLS_EVM_ADDRESS.equals(address)) {
-            return lambdaContractId;
-        }
         final var account = (HederaEvmAccount) get(address);
         if (account == null) {
             // Also return ids for pending creations
             if (pendingCreation != null && pendingCreation.address().equals(address)) {
-                return ContractID.newBuilder()
-                        .contractNum(pendingCreation.number())
-                        .build();
+                return entityIdFactory().newContractId(pendingCreation.number());
             } else {
                 if (!contractMustBePresent) {
-                    return isLongZero(address) ? asNumberedContractId(address) : asEvmContractId(address);
+                    return isLongZero(entityIdFactory(), address)
+                            ? asNumberedContractId(entityIdFactory(), address)
+                            : asEvmContractId(entityIdFactory(), address);
                 }
                 throw new IllegalArgumentException("No contract pending or extant at " + address);
             }
@@ -183,9 +171,6 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
     @Override
     public @Nullable HederaEvmAccount getHederaAccount(@NonNull ContractID contractId) {
         requireNonNull(contractId);
-        if (contractId.equals(lambdaContractId)) {
-            return new ProxyLambdaAccount(contractId, evmFrameState);
-        }
         contractId = enhancement.operations().shardAndRealmValidated(contractId);
         final Address address;
         if (contractId.hasEvmAddress()) {
@@ -320,17 +305,14 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
      */
     @Override
     public @Nullable Account get(@NonNull final Address address) {
-        return getAccount(address);
+        return evmFrameState.getAccount(address);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public @Nullable MutableAccount getAccount(@NonNull final Address address) {
-        if (lambdaContractId != null && HLS_EVM_ADDRESS.equals(address)) {
-            return new ProxyLambdaAccount(lambdaContractId, evmFrameState);
-        }
+    public MutableAccount getAccount(@NonNull final Address address) {
         return evmFrameState.getMutableAccount(address);
     }
 
@@ -353,11 +335,16 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
             enhancement
                     .operations()
                     .createContract(
-                            number, requireNonNull(pendingCreation.body()), pendingCreation.aliasIfApplicable());
+                            number,
+                            requireNonNull(pendingCreation.body()),
+                            pendingCreation.aliasIfApplicable(entityIdFactory()));
         } else {
             enhancement
                     .operations()
-                    .createContract(number, pendingCreation.parentNumber(), pendingCreation.aliasIfApplicable());
+                    .createContract(
+                            number,
+                            pendingCreation.parentNumber(),
+                            pendingCreation.aliasIfApplicable(entityIdFactory()));
         }
         return evmFrameState.getMutableAccount(pendingCreation.address());
     }
@@ -367,7 +354,7 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
      */
     @Override
     public void deleteAccount(@NonNull final Address address) {
-        if (isLongZero(address)) {
+        if (isLongZero(entityIdFactory(), address)) {
             enhancement.operations().deleteUnaliasedContract(numberOfLongZero(address));
         } else {
             enhancement.operations().deleteAliasedContract(aliasFrom(address));
@@ -434,7 +421,6 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
         if (this.pendingCreation != null) {
             child.pendingCreation = this.pendingCreation;
         }
-        child.lambdaContractId = this.lambdaContractId;
         child.contractMustBePresent = this.contractMustBePresent;
         return child;
     }
@@ -505,7 +491,7 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
             @Nullable final Address alias) {
         final var number = enhancement.operations().peekNextEntityNumber();
         pendingCreation = new PendingCreation(
-                alias == null ? asLongZeroAddress(number) : alias,
+                alias == null ? asLongZeroAddress(entityIdFactory(), number) : alias,
                 number,
                 origin != null ? evmFrameState.getIdNumber(origin) : MISSING_ENTITY_NUMBER,
                 body);

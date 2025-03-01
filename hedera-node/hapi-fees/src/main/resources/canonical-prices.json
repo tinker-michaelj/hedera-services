@@ -227,5 +227,8 @@
   },
   "LambdaSStore": {
     "DEFAULT": 0.001
+  },
+  "AtomicBatch": {
+    "DEFAULT": 0.001
   }
 }

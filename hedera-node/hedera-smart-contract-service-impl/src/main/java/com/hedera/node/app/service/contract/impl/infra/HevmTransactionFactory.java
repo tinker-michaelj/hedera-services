@@ -69,6 +69,7 @@ import com.hedera.node.config.data.HederaConfig;
 import com.hedera.node.config.data.LedgerConfig;
 import com.hedera.node.config.data.StakingConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
+import com.swirlds.state.lifecycle.EntityIdFactory;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -95,6 +96,7 @@ public class HevmTransactionFactory {
     private final HydratedEthTxData hydratedEthTxData;
     private final EthTxSigsCache ethereumSignatures;
     private final HederaEvmContext hederaEvmContext;
+    private final EntityIdFactory entityIdFactory;
 
     @Inject
     public HevmTransactionFactory(
@@ -114,7 +116,8 @@ public class HevmTransactionFactory {
             @NonNull final AttributeValidator attributeValidator,
             @NonNull @InitialState final TokenServiceApi tokenServiceApi,
             @NonNull final EthTxSigsCache ethereumSignatures,
-            @NonNull final HederaEvmContext hederaEvmContext) {
+            @NonNull final HederaEvmContext hederaEvmContext,
+            @NonNull final EntityIdFactory entityIdFactory) {
         this.evmHookStore = evmHookStore;
         this.hydratedEthTxData = hydratedEthTxData;
         this.featureFlags = requireNonNull(featureFlags);
@@ -132,6 +135,7 @@ public class HevmTransactionFactory {
         this.attributeValidator = requireNonNull(attributeValidator);
         this.ethereumSignatures = requireNonNull(ethereumSignatures);
         this.hederaEvmContext = requireNonNull(hederaEvmContext);
+        this.entityIdFactory = requireNonNull(entityIdFactory);
     }
 
     /**
@@ -230,11 +234,7 @@ public class HevmTransactionFactory {
         return new HederaEvmTransaction(
                 senderId,
                 relayerId,
-                asPriorityId(
-                        ContractID.newBuilder()
-                                .evmAddress(Bytes.wrap(ethTxData.to()))
-                                .build(),
-                        accountStore),
+                asPriorityId(entityIdFactory.newContractIdWithEvmAddress(Bytes.wrap(ethTxData.to())), accountStore),
                 ethTxData.nonce(),
                 ethTxData.hasCallData() ? Bytes.wrap(ethTxData.callData()) : Bytes.EMPTY,
                 Bytes.wrap(ethTxData.chainId()),

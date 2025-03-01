@@ -1,6 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.service.token.impl.handlers;
 
+import static com.hedera.hapi.node.base.ResponseCodeEnum.CUSTOM_FEE_CHARGING_EXCEEDED_MAX_ACCOUNT_AMOUNTS;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INSUFFICIENT_PAYER_BALANCE_FOR_CUSTOM_FEE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INSUFFICIENT_SENDER_ACCOUNT_BALANCE_FOR_CUSTOM_FEE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TRANSACTION_BODY;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.OK;
+import static com.hedera.hapi.node.base.SubType.DEFAULT;
+import static com.hedera.hapi.node.base.SubType.TOKEN_FUNGIBLE_COMMON;
+import static com.hedera.hapi.node.base.SubType.TOKEN_FUNGIBLE_COMMON_WITH_CUSTOM_FEES;
+import static com.hedera.hapi.node.base.SubType.TOKEN_NON_FUNGIBLE_UNIQUE;
+import static com.hedera.hapi.node.base.SubType.TOKEN_NON_FUNGIBLE_UNIQUE_WITH_CUSTOM_FEES;
+import static com.hedera.node.app.hapi.fees.usage.SingletonUsageProperties.USAGE_PROPERTIES;
+import static com.hedera.node.app.hapi.fees.usage.crypto.CryptoOpsUsage.LONG_ACCOUNT_AMOUNT_BYTES;
+import static com.hedera.node.app.hapi.fees.usage.token.TokenOpsUsage.LONG_BASIC_ENTITY_ID_SIZE;
+import static com.hedera.node.app.hapi.fees.usage.token.entities.TokenEntitySizes.TOKEN_ENTITY_SIZES;
+import static com.hedera.node.app.spi.workflows.PreCheckException.validateTruePreCheck;
+import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.joining;
+
 import com.hedera.hapi.node.base.AccountAmount;
 import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.HederaFunctionality;
@@ -38,33 +56,14 @@ import com.hedera.node.config.data.LedgerConfig;
 import com.hedera.node.config.data.TokensConfig;
 import com.swirlds.base.utility.Pair;
 import edu.umd.cs.findbugs.annotations.NonNull;
-
-import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import static com.hedera.hapi.node.base.ResponseCodeEnum.CUSTOM_FEE_CHARGING_EXCEEDED_MAX_ACCOUNT_AMOUNTS;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INSUFFICIENT_PAYER_BALANCE_FOR_CUSTOM_FEE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INSUFFICIENT_SENDER_ACCOUNT_BALANCE_FOR_CUSTOM_FEE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TRANSACTION_BODY;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.OK;
-import static com.hedera.hapi.node.base.SubType.DEFAULT;
-import static com.hedera.hapi.node.base.SubType.TOKEN_FUNGIBLE_COMMON;
-import static com.hedera.hapi.node.base.SubType.TOKEN_FUNGIBLE_COMMON_WITH_CUSTOM_FEES;
-import static com.hedera.hapi.node.base.SubType.TOKEN_NON_FUNGIBLE_UNIQUE;
-import static com.hedera.hapi.node.base.SubType.TOKEN_NON_FUNGIBLE_UNIQUE_WITH_CUSTOM_FEES;
-import static com.hedera.node.app.hapi.fees.usage.SingletonUsageProperties.USAGE_PROPERTIES;
-import static com.hedera.node.app.hapi.fees.usage.crypto.CryptoOpsUsage.LONG_ACCOUNT_AMOUNT_BYTES;
-import static com.hedera.node.app.hapi.fees.usage.token.TokenOpsUsage.LONG_BASIC_ENTITY_ID_SIZE;
-import static com.hedera.node.app.hapi.fees.usage.token.entities.TokenEntitySizes.TOKEN_ENTITY_SIZES;
-import static com.hedera.node.app.spi.workflows.PreCheckException.validateTruePreCheck;
-import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.joining;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * This class contains all workflow-related functionality regarding {@link
@@ -212,10 +211,12 @@ public class CryptoTransferHandler extends TransferExecutor implements Transacti
             for (final var hbarAdjust : op.transfersOrElse(TransferList.DEFAULT).accountAmounts()) {
                 final var num = hbarAdjust.accountIDOrThrow().accountNumOrThrow();
                 if (hbarAdjust.amount() > 0) {
-                    trade.computeIfAbsent(num, ignore -> new HashMap<>()).computeIfAbsent("CREDITS", k -> new ArrayList<>())
+                    trade.computeIfAbsent(num, ignore -> new HashMap<>())
+                            .computeIfAbsent("CREDITS", k -> new ArrayList<>())
                             .add(new Pair<>(hbarAdjust.amount(), 0L));
                 } else {
-                    trade.computeIfAbsent(num, ignore -> new HashMap<>()).computeIfAbsent("DEBITS", k -> new ArrayList<>())
+                    trade.computeIfAbsent(num, ignore -> new HashMap<>())
+                            .computeIfAbsent("DEBITS", k -> new ArrayList<>())
                             .add(new Pair<>(-hbarAdjust.amount(), 0L));
                 }
             }
@@ -224,22 +225,32 @@ public class CryptoTransferHandler extends TransferExecutor implements Transacti
                 for (final var tokenAdjust : tokenTransfers.transfers()) {
                     final var num = tokenAdjust.accountIDOrThrow().accountNumOrThrow();
                     if (tokenAdjust.amount() > 0) {
-                        trade.computeIfAbsent(num, ignore -> new HashMap<>()).computeIfAbsent("CREDITS", k -> new ArrayList<>())
+                        trade.computeIfAbsent(num, ignore -> new HashMap<>())
+                                .computeIfAbsent("CREDITS", k -> new ArrayList<>())
                                 .add(new Pair<>(tokenAdjust.amount(), tokenNum));
                     } else {
-                        trade.computeIfAbsent(num, ignore -> new HashMap<>()).computeIfAbsent("DEBITS", k -> new ArrayList<>())
+                        trade.computeIfAbsent(num, ignore -> new HashMap<>())
+                                .computeIfAbsent("DEBITS", k -> new ArrayList<>())
                                 .add(new Pair<>(-tokenAdjust.amount(), tokenNum));
                     }
                 }
             }
             trade.forEach((num, results) -> {
                 System.out.println(" - 0.0." + num);
-                System.out.println("    -> GETS : " + (results.containsKey("CREDITS")
-                        ? results.get("CREDITS").stream().map(p -> p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value())).collect(joining(","))
-                        : "Nothing"));
-                System.out.println("    -> PAYS : " + (results.containsKey("DEBITS")
-                        ? results.get("DEBITS").stream().map(p -> p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value())).collect(joining(","))
-                        : "Nothing"));
+                System.out.println("    -> GETS : "
+                        + (results.containsKey("CREDITS")
+                                ? results.get("CREDITS").stream()
+                                        .map(p ->
+                                                p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value()))
+                                        .collect(joining(","))
+                                : "Nothing"));
+                System.out.println("    -> PAYS : "
+                        + (results.containsKey("DEBITS")
+                                ? results.get("DEBITS").stream()
+                                        .map(p ->
+                                                p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value()))
+                                        .collect(joining(","))
+                                : "Nothing"));
             });
             System.out.println("------------------------------------------\n");
         }

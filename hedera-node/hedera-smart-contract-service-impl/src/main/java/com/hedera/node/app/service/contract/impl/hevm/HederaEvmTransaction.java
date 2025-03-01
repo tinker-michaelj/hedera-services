@@ -26,7 +26,7 @@ public record HederaEvmTransaction(
         long maxGasAllowance,
         @Nullable ContractCreateTransactionBody hapiCreation,
         @Nullable HandleException exception,
-        boolean isLambdaDispatch) {
+        boolean isHookDispatch) {
     public static final long NOT_APPLICABLE = -1L;
 
     public @NonNull AccountID relayerIdOrThrow() {
@@ -135,6 +135,6 @@ public record HederaEvmTransaction(
                 this.maxGasAllowance,
                 this.hapiCreation,
                 exception,
-                this.isLambdaDispatch);
+                this.isHookDispatch);
     }
 }
