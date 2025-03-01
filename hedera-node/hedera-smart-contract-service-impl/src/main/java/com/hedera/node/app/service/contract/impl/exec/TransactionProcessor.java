@@ -237,7 +237,7 @@ public class TransactionProcessor {
             }
             parties = new InvolvedParties(sender, relayer, to);
         } else if (transaction.isLambdaDispatch()) {
-            parties = new InvolvedParties(sender, null, ProxyLambdaAccount.HLS_EVM_ADDRESS);
+            parties = new InvolvedParties(sender, null, ProxyLambdaAccount.HHS_EVM_ADDRESS);
         } else {
             final var to = updater.getHederaAccount(transaction.contractIdOrThrow());
             if (contractNotRequired(to, config)) {

@@ -113,7 +113,6 @@ import com.swirlds.common.constructable.ClassConstructorPair;
 import com.swirlds.common.constructable.ConstructableRegistry;
 import com.swirlds.common.constructable.ConstructableRegistryException;
 import com.swirlds.common.constructable.RuntimeConstructable;
-import com.swirlds.common.crypto.CryptographyHolder;
 import com.swirlds.common.crypto.Hash;
 import com.swirlds.common.crypto.Signature;
 import com.swirlds.common.notification.NotificationEngine;
@@ -197,9 +196,6 @@ import org.apache.logging.log4j.Logger;
  */
 public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatusChangeListener, AppContext.Gossip {
     private static final Logger logger = LogManager.getLogger(Hedera.class);
-
-    // FUTURE: This should come from configuration, not be hardcoded.
-    public static final int MAX_SIGNED_TXN_SIZE = 6144;
 
     /**
      * The application name from the platform's perspective. This is currently locked in at the old main class name and
@@ -322,7 +318,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
      * When initializing the State API, the state being initialized.
      */
     @Nullable
-    private State initState;
+    private MerkleNodeState initState;
 
     /**
      * The metrics object being used for reporting.
@@ -470,7 +466,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
                 new AppSignatureVerifier(
                         bootstrapConfig.getConfigData(HederaConfig.class),
                         new SignatureExpanderImpl(),
-                        new SignatureVerifierImpl(CryptographyHolder.get())),
+                        new SignatureVerifierImpl()),
                 this,
                 configSupplier,
                 () -> daggerApp.networkInfo().selfNodeInfo(),
@@ -524,8 +520,8 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
             stateRootSupplier = blockStreamsEnabled ? () -> withListeners(baseSupplier.get()) : baseSupplier;
             onSealConsensusRound = blockStreamsEnabled ? this::manageBlockEndRound : (round, state) -> true;
             // And the factory for the MerkleStateRoot class id must be our constructor
-            constructableRegistry.registerConstructable(
-                    new ClassConstructorPair(HederaStateRoot.class, stateRootSupplier::get));
+            constructableRegistry.registerConstructable(new ClassConstructorPair(
+                    HederaStateRoot.class, () -> stateRootSupplier.get().getRoot()));
         } catch (final ConstructableRegistryException e) {
             logger.error("Failed to register " + HederaStateRoot.class + " factory with ConstructableRegistry", e);
             throw new IllegalStateException(e);
@@ -577,12 +573,30 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
     public void notify(@NonNull final PlatformStatusChangeNotification notification) {
         this.platformStatus = notification.getNewStatus();
         logger.info("HederaNode#{} is {}", platform.getSelfId(), platformStatus.name());
+        final var streamToBlockNodes = configProvider
+                .getConfiguration()
+                .getConfigData(BlockStreamConfig.class)
+                .streamToBlockNodes();
         switch (platformStatus) {
-            case ACTIVE -> startGrpcServer();
-            case CATASTROPHIC_FAILURE -> shutdownGrpcServer();
+            case ACTIVE -> {
+                startGrpcServer();
+            }
             case FREEZE_COMPLETE -> {
-                closeRecordStreams();
+                logger.info("Platform status is now FREEZE_COMPLETE");
                 shutdownGrpcServer();
+                closeRecordStreams();
+                if (streamToBlockNodes && isNotEmbedded()) {
+                    logger.info("FREEZE_COMPLETE - Shutting down connections to Block Nodes");
+                    daggerApp.blockNodeConnectionManager().shutdown();
+                }
+            }
+            case CATASTROPHIC_FAILURE -> {
+                logger.error("Platform status is now CATASTROPHIC_FAILURE");
+                shutdownGrpcServer();
+                if (streamToBlockNodes && isNotEmbedded()) {
+                    logger.info("CATASTROPHIC_FAILURE - Shutting down connections to Block Nodes");
+                    daggerApp.blockNodeConnectionManager().shutdown();
+                }
             }
             case REPLAYING_EVENTS, STARTING_UP, OBSERVING, RECONNECT_COMPLETE, CHECKING, FREEZING, BEHIND -> {
                 // Nothing to do here, just enumerate for completeness
@@ -606,7 +620,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
      * @param platformConfig the platform configuration
      */
     public void initializeStatesApi(
-            @NonNull final State state,
+            @NonNull final MerkleNodeState state,
             @NonNull final InitTrigger trigger,
             @Nullable final Network genesisNetwork,
             @NonNull final Configuration platformConfig) {
@@ -655,7 +669,9 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
      */
     @SuppressWarnings("java:S1181") // catching Throwable instead of Exception when we do a direct System.exit()
     public void onStateInitialized(
-            @NonNull final State state, @NonNull final Platform platform, @NonNull final InitTrigger trigger) {
+            @NonNull final MerkleNodeState state,
+            @NonNull final Platform platform,
+            @NonNull final InitTrigger trigger) {
         // A Hedera object can receive multiple onStateInitialized() calls throughout its lifetime if
         // the platform needs to initialize a learned state after reconnect; however, it cannot be
         // used by multiple platform instances
@@ -664,7 +680,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
             throw new IllegalStateException("Platform should never change once set");
         }
         this.platform = requireNonNull(platform);
-        if (state.getReadableStates(PlatformStateService.NAME).isEmpty()) {
+        if (state.getReadableStates(EntityIdService.NAME).isEmpty()) {
             initializeStatesApi(state, trigger, null, platform.getContext().getConfiguration());
         }
         // With the States API grounded in the working state, we can create the object graph from it
@@ -694,7 +710,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
      * @param platformConfig platform configuration
      */
     private void migrateSchemas(
-            @NonNull final State state,
+            @NonNull final MerkleNodeState state,
             @Nullable final ServicesSoftwareVersion deserializedVersion,
             @NonNull final InitTrigger trigger,
             @NonNull final Metrics metrics,
@@ -765,7 +781,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
      * {@link #newStateRoot()} or an instance of {@link MerkleNodeState} created by the platform and
      * loaded from the saved state).
      *
-     * <p>(FUTURE) Consider moving this initialization into {@link #onStateInitialized(State, Platform, InitTrigger)}
+     * <p>(FUTURE) Consider moving this initialization into {@link #onStateInitialized(MerkleNodeState, Platform, InitTrigger)}
      * instead, as there is no special significance to having it here instead.
      */
     @SuppressWarnings("java:S1181") // catching Throwable instead of Exception when we do a direct System.exit()
@@ -874,6 +890,9 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
         shutdownGrpcServer();
 
         if (daggerApp != null) {
+            logger.debug("Shutting down the Block Node Connection Manager");
+            daggerApp.blockNodeConnectionManager().shutdown();
+
             logger.debug("Shutting down the state");
             final var state = daggerApp.workingStateAccessor().getState();
             if (state instanceof HederaStateRoot msr) {
@@ -937,7 +956,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
      */
     public void onHandleConsensusRound(
             @NonNull final Round round,
-            @NonNull final State state,
+            @NonNull final MerkleNodeState state,
             @NonNull final Consumer<ScopedSystemTransaction<StateSignatureTransaction>> stateSignatureTxnCallback) {
         daggerApp.workingStateAccessor().setState(state);
         daggerApp.handleWorkflow().handleRound(state, round, stateSignatureTxnCallback);
@@ -1108,8 +1127,12 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
         final var networkInfo =
                 new StateNetworkInfo(platform.getSelfId().id(), state, rosterStore.getActiveRoster(), configProvider);
         final var blockHashSigner = blockHashSignerFactory.apply(hintsService, historyService, configProvider);
+        final int maxSignedTxnSize = configProvider
+                .getConfiguration()
+                .getConfigData(HederaConfig.class)
+                .transactionMaxBytes();
         // Fully qualified so as to not confuse javadoc
-        daggerApp = com.hedera.node.app.DaggerHederaInjectionComponent.builder()
+        daggerApp = DaggerHederaInjectionComponent.builder()
                 .configProviderImpl(configProvider)
                 .bootstrapConfigProviderImpl(bootstrapConfigProvider)
                 .fileServiceImpl(fileServiceImpl)
@@ -1119,8 +1142,7 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
                 .softwareVersion(version.getPbjSemanticVersion())
                 .self(networkInfo.selfNodeInfo())
                 .platform(platform)
-                .maxSignedTxnSize(MAX_SIGNED_TXN_SIZE)
-                .crypto(CryptographyHolder.get())
+                .maxSignedTxnSize(maxSignedTxnSize)
                 .currentPlatformStatus(new CurrentPlatformStatusImpl(platform))
                 .servicesRegistry(servicesRegistry)
                 .instantSource(appContext.instantSource())
@@ -1317,6 +1339,28 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, PlatformStatus
         if (tssConfig.hintsEnabled()) {
             hintsService.initSigningForNextScheme(
                     new ReadableHintsStoreImpl(initState.getReadableStates(HintsService.NAME)));
+        }
+    }
+
+    /**
+     * Initializes block node connections and waits for at least one connection to be established.
+     * This should be called before platform.start() to ensure we don't miss any blocks.
+     *
+     * @param timeout maximum time to wait for a connection
+     */
+    public void initializeBlockNodeConnections(java.time.Duration timeout) {
+        final var blockStreamConfig = configProvider.getConfiguration().getConfigData(BlockStreamConfig.class);
+        if (!blockStreamConfig.streamToBlockNodes()) {
+            logger.info("Block stream to Block Nodes is disabled, skipping block node connection initialization");
+            return;
+        }
+
+        logger.info("Initializing block node connections with timeout {}", timeout);
+        boolean connected = daggerApp.blockNodeConnectionManager().waitForConnection(timeout);
+        if (blockStreamConfig.shutdownNodeOnNoBlockNodes() && !connected) {
+            logger.error("No block node connections established within timeout, shutting down");
+            this.shutdown();
+            System.exit(1);
         }
     }
 }

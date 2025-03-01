@@ -47,6 +47,7 @@ import static com.hedera.node.app.service.contract.impl.test.TestHelpers.SENDER_
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.SOME_DURATION;
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.SOME_MEMO;
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.assertFailsWith;
+import static com.hedera.node.app.service.contract.impl.test.TestHelpers.entityIdFactory;
 import static com.hedera.node.app.spi.validation.ExpiryMeta.NA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -158,7 +159,8 @@ class HevmTransactionFactoryTest {
                 attributeValidator,
                 tokenServiceApi,
                 ethereumSignatures,
-                context);
+                context,
+                entityIdFactory);
     }
 
     @Test
@@ -726,7 +728,8 @@ class HevmTransactionFactoryTest {
                 attributeValidator,
                 tokenServiceApi,
                 ethereumSignatures,
-                context);
+                context,
+                entityIdFactory);
     }
 
     private void givenInsteadFailedHydrationSubject() {
@@ -747,7 +750,8 @@ class HevmTransactionFactoryTest {
                 attributeValidator,
                 tokenServiceApi,
                 ethereumSignatures,
-                context);
+                context,
+                entityIdFactory);
     }
 
     private void givenInsteadHydratedEthTxWithWrongChainId(@NonNull final EthTxData ethTxData) {
@@ -768,7 +772,8 @@ class HevmTransactionFactoryTest {
                 attributeValidator,
                 tokenServiceApi,
                 ethereumSignatures,
-                context);
+                context,
+                entityIdFactory);
     }
 
     private void givenInsteadHydratedEthTxWithRightChainId(@NonNull final EthTxData ethTxData) {
@@ -789,6 +794,7 @@ class HevmTransactionFactoryTest {
                 attributeValidator,
                 tokenServiceApi,
                 ethereumSignatures,
-                context);
+                context,
+                entityIdFactory);
     }
 }

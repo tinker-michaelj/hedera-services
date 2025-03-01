@@ -20,6 +20,7 @@ import com.swirlds.common.crypto.CryptographyFactory;
 import com.swirlds.common.crypto.config.CryptoConfig;
 import com.swirlds.common.io.utility.LegacyTemporaryFileBuilder;
 import com.swirlds.common.merkle.crypto.MerkleCryptographyFactory;
+import com.swirlds.common.merkle.utility.MerkleTreeSnapshotReader;
 import com.swirlds.common.metrics.noop.NoOpMetrics;
 import com.swirlds.common.test.fixtures.platform.TestPlatformContextBuilder;
 import com.swirlds.config.api.Configuration;
@@ -39,7 +40,6 @@ import com.swirlds.state.lifecycle.Schema;
 import com.swirlds.state.lifecycle.StartupNetworks;
 import com.swirlds.state.lifecycle.StateDefinition;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
-import com.swirlds.state.merkle.MerkleTreeSnapshotReader;
 import com.swirlds.state.merkle.disk.OnDiskReadableKVState;
 import com.swirlds.state.merkle.disk.OnDiskWritableKVState;
 import com.swirlds.state.spi.ReadableKVState;
@@ -188,11 +188,11 @@ class SerializationTest extends MerkleTestBase {
             // Force flush the VMs to disk to test serialization and deserialization
             forceFlush(originalTree.getReadableStates(FIRST_SERVICE).get(ANIMAL_STATE_KEY));
             copy.copy(); // make a fast copy because we can only write to disk an immutable copy
-            CRYPTO.digestTreeSync(copy);
-            serializedBytes = writeTree(copy, dir);
+            CRYPTO.digestTreeSync(copy.getRoot());
+            serializedBytes = writeTree(copy.getRoot(), dir);
         } else {
-            CRYPTO.digestTreeSync(copy);
-            serializedBytes = writeTree(originalTree, dir);
+            CRYPTO.digestTreeSync(copy.getRoot());
+            serializedBytes = writeTree(originalTree.getRoot(), dir);
         }
 
         final TestMerkleStateRoot loadedTree = loadedMerkleTree(schemaV1, serializedBytes);
@@ -229,7 +229,8 @@ class SerializationTest extends MerkleTestBase {
 
         // Restore to a fresh MerkleDb instance
         MerkleDb.resetDefaultInstancePath();
-        final State state = originalTree.loadSnapshot(tempDir.resolve(MerkleTreeSnapshotReader.SIGNED_STATE_FILE_NAME));
+        final MerkleNodeState state =
+                originalTree.loadSnapshot(tempDir.resolve(MerkleTreeSnapshotReader.SIGNED_STATE_FILE_NAME));
         initServices(schemaV1, state);
         assertTree(state);
     }
@@ -248,8 +249,8 @@ class SerializationTest extends MerkleTestBase {
 
         forceFlush(originalTree.getReadableStates(FIRST_SERVICE).get(ANIMAL_STATE_KEY));
         copy.copy(); // make a fast copy because we can only write to disk an immutable copy
-        CRYPTO.digestTreeSync(copy);
-        final byte[] serializedBytes = writeTree(copy, dir);
+        CRYPTO.digestTreeSync(copy.getRoot());
+        final byte[] serializedBytes = writeTree(copy.getRoot(), dir);
 
         TestMerkleStateRoot loadedTree = loadedMerkleTree(schemaV1, serializedBytes);
         ((OnDiskReadableKVState) originalTree.getReadableStates(FIRST_SERVICE).get(ANIMAL_STATE_KEY)).reset();
@@ -286,7 +287,7 @@ class SerializationTest extends MerkleTestBase {
         return loadedTree;
     }
 
-    private void initServices(Schema schemaV1, State loadedTree) {
+    private void initServices(Schema schemaV1, MerkleNodeState loadedTree) {
         final var newRegistry =
                 new MerkleSchemaRegistry(registry, FIRST_SERVICE, DEFAULT_CONFIG, new SchemaApplications());
         newRegistry.register(schemaV1);
@@ -303,7 +304,7 @@ class SerializationTest extends MerkleTestBase {
                 migrationStateChanges,
                 startupNetworks,
                 TEST_PLATFORM_STATE_FACADE);
-        ((TestMerkleStateRoot) loadedTree).migrate(CURRENT_VERSION);
+        loadedTree.getRoot().migrate(CURRENT_VERSION);
     }
 
     private MerkleNodeState createMerkleHederaState(Schema schemaV1) {

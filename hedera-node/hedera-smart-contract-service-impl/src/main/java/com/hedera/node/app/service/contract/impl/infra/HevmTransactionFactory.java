@@ -1,37 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.service.contract.impl.infra;
 
-import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_BYTECODE_EMPTY;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_DELETED;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_FILE_EMPTY;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_NEGATIVE_GAS;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_NEGATIVE_VALUE;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.ERROR_DECODING_BYTESTRING;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.FILE_DELETED;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.HOOK_NOT_FOUND;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INSUFFICIENT_GAS;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_ETHEREUM_TRANSACTION;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_FILE_ID;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_MAX_AUTO_ASSOCIATIONS;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_RENEWAL_PERIOD;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.MAX_GAS_LIMIT_EXCEEDED;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.NEGATIVE_ALLOWANCE_AMOUNT;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.PROXY_ACCOUNT_ID_FIELD_IS_DEPRECATED;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.REQUESTED_NUM_AUTOMATIC_ASSOCIATIONS_EXCEEDS_ASSOCIATION_LIMIT;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.SERIALIZATION_FAILED;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.WRONG_CHAIN_ID;
-import static com.hedera.node.app.service.contract.impl.handlers.ContractUpdateHandler.UNLIMITED_AUTOMATIC_ASSOCIATIONS;
-import static com.hedera.node.app.service.contract.impl.hevm.HederaEvmTransaction.NOT_APPLICABLE;
-import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.asPriorityId;
-import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.removeIfAnyLeading0x;
-import static com.hedera.node.app.service.contract.impl.utils.SynthTxnUtils.synthEthTxCreation;
-import static com.hedera.node.app.spi.key.KeyUtils.isEmpty;
-import static com.hedera.node.app.spi.validation.ExpiryMeta.NA;
-import static com.hedera.node.app.spi.workflows.HandleException.validateFalse;
-import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
-import static java.util.Objects.requireNonNull;
-import static org.apache.tuweni.bytes.Bytes.EMPTY;
-
 import com.esaulpaugh.headlong.util.Integers;
 import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.ContractID;
@@ -69,11 +38,44 @@ import com.hedera.node.config.data.HederaConfig;
 import com.hedera.node.config.data.LedgerConfig;
 import com.hedera.node.config.data.StakingConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
+import com.swirlds.state.lifecycle.EntityIdFactory;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
-import javax.inject.Inject;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
+
+import javax.inject.Inject;
+
+import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_BYTECODE_EMPTY;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_DELETED;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_FILE_EMPTY;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_NEGATIVE_GAS;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.CONTRACT_NEGATIVE_VALUE;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.ERROR_DECODING_BYTESTRING;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.FILE_DELETED;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.HOOK_NOT_FOUND;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INSUFFICIENT_GAS;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_ETHEREUM_TRANSACTION;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_FILE_ID;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_MAX_AUTO_ASSOCIATIONS;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_RENEWAL_PERIOD;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.MAX_GAS_LIMIT_EXCEEDED;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.NEGATIVE_ALLOWANCE_AMOUNT;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.PROXY_ACCOUNT_ID_FIELD_IS_DEPRECATED;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.REQUESTED_NUM_AUTOMATIC_ASSOCIATIONS_EXCEEDS_ASSOCIATION_LIMIT;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.SERIALIZATION_FAILED;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.WRONG_CHAIN_ID;
+import static com.hedera.node.app.service.contract.impl.handlers.ContractUpdateHandler.UNLIMITED_AUTOMATIC_ASSOCIATIONS;
+import static com.hedera.node.app.service.contract.impl.hevm.HederaEvmTransaction.NOT_APPLICABLE;
+import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.asPriorityId;
+import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.removeIfAnyLeading0x;
+import static com.hedera.node.app.service.contract.impl.utils.SynthTxnUtils.synthEthTxCreation;
+import static com.hedera.node.app.spi.key.KeyUtils.isEmpty;
+import static com.hedera.node.app.spi.validation.ExpiryMeta.NA;
+import static com.hedera.node.app.spi.workflows.HandleException.validateFalse;
+import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
+import static java.util.Objects.requireNonNull;
+import static org.apache.tuweni.bytes.Bytes.EMPTY;
 
 @TransactionScope
 public class HevmTransactionFactory {
@@ -95,6 +97,7 @@ public class HevmTransactionFactory {
     private final HydratedEthTxData hydratedEthTxData;
     private final EthTxSigsCache ethereumSignatures;
     private final HederaEvmContext hederaEvmContext;
+    private final EntityIdFactory entityIdFactory;
 
     @Inject
     public HevmTransactionFactory(
@@ -114,7 +117,8 @@ public class HevmTransactionFactory {
             @NonNull final AttributeValidator attributeValidator,
             @NonNull @InitialState final TokenServiceApi tokenServiceApi,
             @NonNull final EthTxSigsCache ethereumSignatures,
-            @NonNull final HederaEvmContext hederaEvmContext) {
+            @NonNull final HederaEvmContext hederaEvmContext,
+            @NonNull final EntityIdFactory entityIdFactory) {
         this.evmHookStore = evmHookStore;
         this.hydratedEthTxData = hydratedEthTxData;
         this.featureFlags = requireNonNull(featureFlags);
@@ -132,6 +136,7 @@ public class HevmTransactionFactory {
         this.attributeValidator = requireNonNull(attributeValidator);
         this.ethereumSignatures = requireNonNull(ethereumSignatures);
         this.hederaEvmContext = requireNonNull(hederaEvmContext);
+        this.entityIdFactory = requireNonNull(entityIdFactory);
     }
 
     /**
@@ -230,11 +235,7 @@ public class HevmTransactionFactory {
         return new HederaEvmTransaction(
                 senderId,
                 relayerId,
-                asPriorityId(
-                        ContractID.newBuilder()
-                                .evmAddress(Bytes.wrap(ethTxData.to()))
-                                .build(),
-                        accountStore),
+                asPriorityId(entityIdFactory.newContractIdWithEvmAddress(Bytes.wrap(ethTxData.to())), accountStore),
                 ethTxData.nonce(),
                 ethTxData.hasCallData() ? Bytes.wrap(ethTxData.callData()) : Bytes.EMPTY,
                 Bytes.wrap(ethTxData.chainId()),
