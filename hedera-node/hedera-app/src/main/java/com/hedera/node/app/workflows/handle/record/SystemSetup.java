@@ -163,36 +163,54 @@ public class SystemSetup {
         setupPlexTopics(systemContext);
     }
 
-    private static final long FIRST_ACCOUNT_NUM = 10000L;
     private static final long FIRST_TOKEN_NUM = 20000L;
     private static final long FIRST_TOPIC_NUM = 30000L;
 
-    private static final String HEXED_PUBLIC_KEY = "72d84208f4f546fffc79d31f0cbfa7352c38887efe4fe0475270e9a38f56accf";
+    private static final String A4589187_PUBLIC_KEY =
+            "ac228a873619e041648113a84f12079b8af8522073adc343e1a91594f0b1c05d";
+    private static final String A4589188_PUBLIC_KEY =
+            "2cfc00272518122e7c080b94fb01dae7b6ac6f0d92e5314d97583b75ac4996c0";
+    private static final String A4589189_PUBLIC_KEY =
+            "77afcb2b3edd975e9df3ceeafba49e9eab1e65949de2c10eb54a4fe695b4c7f8";
+    private static final String A4589190_PUBLIC_KEY =
+            "00239c97975a48b7a9500d30c71f4b6445e73d8b246a8d1a986bb493d50ef0c7";
+    private static final String A4589192_PUBLIC_KEY =
+            "96accd0d08b2a0883d5fa630e53ac8632da6578f1f049544e943bc281ae4e8ac";
+    private static final long MASTER_ID = 4589187L;
     private static final Key MASTER_KEY =
-            Key.newBuilder().ed25519(Bytes.fromHex(HEXED_PUBLIC_KEY)).build();
-    private static final int NUM_ACCOUNTS = 10;
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589187_PUBLIC_KEY)).build();
+    private static final Map<Long, Key> WELL_KNOWN_KEYS = Map.of(
+            MASTER_ID,
+            MASTER_KEY,
+            4589188L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589188_PUBLIC_KEY)).build(),
+            4589189L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589189_PUBLIC_KEY)).build(),
+            4589190L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589190_PUBLIC_KEY)).build(),
+            4589192L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
     private static final int NUM_TOKENS = 10;
     private static final int NUM_TOPICS = 1;
-    private static final long INITIAL_BALANCE = 10 * 100_000_000L;
+    private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
 
     private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
 
     private void setupPlexAccounts(SystemContext systemContext) {
-        for (int i = 0; i < NUM_ACCOUNTS; i++) {
+        WELL_KNOWN_KEYS.forEach((id, key) -> {
             final var op = CryptoCreateTransactionBody.newBuilder()
-                    .key(MASTER_KEY)
+                    .key(key)
                     .maxAutomaticTokenAssociations(NUM_TOKENS)
                     .initialBalance(INITIAL_BALANCE)
                     .autoRenewPeriod(new Duration(7776000L))
                     .build();
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder().cryptoCreateAccount(op).build(), FIRST_ACCOUNT_NUM + i);
-        }
+                    TransactionBody.newBuilder().cryptoCreateAccount(op).build(), id);
+        });
     }
 
     private void setupPlexTokens(SystemContext systemContext) {
-        final var tokenTreasuryId =
-                AccountID.newBuilder().accountNum(FIRST_ACCOUNT_NUM).build();
+        final var tokenTreasuryId = AccountID.newBuilder().accountNum(MASTER_ID).build();
         for (int i = 0; i < NUM_TOKENS; i++) {
             final var symbol = randomAlpha(3);
             final var op = TokenCreateTransactionBody.newBuilder()

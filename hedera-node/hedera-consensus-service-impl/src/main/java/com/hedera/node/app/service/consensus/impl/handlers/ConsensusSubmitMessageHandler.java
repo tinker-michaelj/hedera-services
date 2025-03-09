@@ -180,7 +180,10 @@ public class ConsensusSubmitMessageHandler implements TransactionHandler {
                     .topicSequenceNumber(updatedTopic.sequenceNumber())
                     .topicRunningHashVersion(RUNNING_HASH_VERSION);
 
-            System.out.println("Placed order '" + new String(op.message().toByteArray()));
+            final var message = new String(op.message().toByteArray());
+            if (message.startsWith("0.0.")) {
+                System.out.println("Order: " + message);
+            }
         } catch (IOException e) {
             throw new HandleException(INVALID_TRANSACTION);
         }
