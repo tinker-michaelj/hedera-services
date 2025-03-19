@@ -24,9 +24,6 @@ module com.hedera.node.app.service.token.impl {
     requires static transitive com.github.spotbugs.annotations;
     requires static java.compiler; // javax.annotation.processing.Generated
 
-    provides com.hedera.node.app.service.token.TokenService with
-            com.hedera.node.app.service.token.impl.TokenServiceImpl;
-
     exports com.hedera.node.app.service.token.impl.handlers;
     exports com.hedera.node.app.service.token.impl;
     exports com.hedera.node.app.service.token.impl.api;

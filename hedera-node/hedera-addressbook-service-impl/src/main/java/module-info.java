@@ -15,7 +15,6 @@ module com.hedera.node.app.service.addressbook.impl {
     requires com.hedera.node.app.service.token;
     requires com.swirlds.common;
     requires com.swirlds.config.api;
-    requires com.swirlds.platform.core;
     requires com.fasterxml.jackson.core;
     requires com.fasterxml.jackson.databind;
     requires static transitive com.github.spotbugs.annotations;
