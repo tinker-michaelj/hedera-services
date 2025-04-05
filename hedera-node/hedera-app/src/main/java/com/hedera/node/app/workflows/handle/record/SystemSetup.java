@@ -32,6 +32,7 @@ import static com.hedera.node.app.spi.workflows.record.StreamBuilder.transaction
 import static com.hedera.node.app.util.FileUtilities.createFileID;
 import static java.util.Objects.requireNonNull;
 
+import com.google.common.base.Strings;
 import com.hedera.hapi.node.addressbook.NodeCreateTransactionBody;
 import com.hedera.hapi.node.addressbook.NodeUpdateTransactionBody;
 import com.hedera.hapi.node.base.AccountID;
@@ -211,14 +212,15 @@ public class SystemSetup {
 
     private void setupPlexTokens(SystemContext systemContext) {
         final var tokenTreasuryId = AccountID.newBuilder().accountNum(MASTER_ID).build();
+        final var letters = "abcdefghij";
         for (int i = 0; i < NUM_TOKENS; i++) {
-            final var symbol = randomAlpha(3);
+            final var letter = letters.charAt(i);
             final var op = TokenCreateTransactionBody.newBuilder()
                     .supplyKey(MASTER_KEY)
                     .tokenType(FUNGIBLE_COMMON)
                     .decimals(RANDOM.nextInt(10))
-                    .symbol(symbol)
-                    .name(symbol)
+                    .symbol(i == 3 ? "USD" : Strings.repeat("" + letter, 3))
+                    .name(i == 3 ? "US Dollar" : ("Token" + letter).toUpperCase())
                     .initialSupply(Long.MAX_VALUE)
                     .treasury(tokenTreasuryId)
                     .build();
@@ -235,14 +237,6 @@ public class SystemSetup {
             systemContext.dispatchCreation(
                     TransactionBody.newBuilder().consensusCreateTopic(op).build(), FIRST_TOPIC_NUM + i);
         }
-    }
-
-    private String randomAlpha(int n) {
-        final StringBuilder sb = new StringBuilder(n);
-        for (int i = 0; i < n; i++) {
-            sb.append("ABCDEFGHIJKLMNOPQRSTUVWXYZ".charAt(RANDOM.nextInt(26)));
-        }
-        return sb.toString();
     }
     // </PLEX>
 
