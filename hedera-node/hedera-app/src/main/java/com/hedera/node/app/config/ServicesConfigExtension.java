@@ -24,7 +24,6 @@ import com.hedera.node.config.converter.SemanticVersionConverter;
 import com.hedera.node.config.data.AccountsConfig;
 import com.hedera.node.config.data.ApiPermissionConfig;
 import com.hedera.node.config.data.AtomicBatchConfig;
-import com.hedera.node.config.data.AutoCreationConfig;
 import com.hedera.node.config.data.AutoRenew2Config;
 import com.hedera.node.config.data.AutoRenewConfig;
 import com.hedera.node.config.data.BalancesConfig;
@@ -41,7 +40,6 @@ import com.hedera.node.config.data.FilesConfig;
 import com.hedera.node.config.data.GrpcConfig;
 import com.hedera.node.config.data.HederaConfig;
 import com.hedera.node.config.data.JumboTransactionsConfig;
-import com.hedera.node.config.data.LazyCreationConfig;
 import com.hedera.node.config.data.LedgerConfig;
 import com.hedera.node.config.data.NettyConfig;
 import com.hedera.node.config.data.NetworkAdminConfig;
@@ -54,7 +52,6 @@ import com.hedera.node.config.data.TokensConfig;
 import com.hedera.node.config.data.TopicsConfig;
 import com.hedera.node.config.data.TraceabilityConfig;
 import com.hedera.node.config.data.TssConfig;
-import com.hedera.node.config.data.UtilPrngConfig;
 import com.hedera.node.config.data.VersionConfig;
 import com.hedera.node.config.types.CongestionMultipliers;
 import com.hedera.node.config.types.EntityScaleFactors;
@@ -84,7 +81,6 @@ public class ServicesConfigExtension implements ConfigurationExtension {
                 AddressBookConfig.class,
                 NodesConfig.class,
                 ApiPermissionConfig.class,
-                AutoCreationConfig.class,
                 AutoRenew2Config.class,
                 AutoRenewConfig.class,
                 BalancesConfig.class,
@@ -100,7 +96,6 @@ public class ServicesConfigExtension implements ConfigurationExtension {
                 FilesConfig.class,
                 GrpcConfig.class,
                 HederaConfig.class,
-                LazyCreationConfig.class,
                 LedgerConfig.class,
                 NettyConfig.class,
                 NetworkAdminConfig.class,
@@ -111,7 +106,6 @@ public class ServicesConfigExtension implements ConfigurationExtension {
                 TokensConfig.class,
                 TopicsConfig.class,
                 TraceabilityConfig.class,
-                UtilPrngConfig.class,
                 AtomicBatchConfig.class,
                 VersionConfig.class,
                 TssConfig.class,
