@@ -218,7 +218,7 @@ public class SystemSetup {
             final var op = TokenCreateTransactionBody.newBuilder()
                     .supplyKey(MASTER_KEY)
                     .tokenType(FUNGIBLE_COMMON)
-                    .decimals(RANDOM.nextInt(10))
+                    .decimals(i == 3 ? 6 : RANDOM.nextInt(10))
                     .symbol(i == 3 ? "USD" : Strings.repeat("" + letter, 3))
                     .name(i == 3 ? "US Dollar" : ("Token" + letter).toUpperCase())
                     .initialSupply(Long.MAX_VALUE)
