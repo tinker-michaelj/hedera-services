@@ -29,12 +29,12 @@ import com.hedera.hapi.node.contract.ContractUpdateTransactionBody;
 import com.hedera.hapi.node.state.token.Account;
 import com.hedera.node.app.hapi.utils.fee.SigValueObj;
 import com.hedera.node.app.hapi.utils.fee.SmartContractFeeBuilder;
+import com.hedera.node.app.hapi.utils.keys.KeyUtils;
 import com.hedera.node.app.service.contract.impl.records.ContractUpdateStreamBuilder;
 import com.hedera.node.app.service.token.ReadableAccountStore;
 import com.hedera.node.app.service.token.api.TokenServiceApi;
 import com.hedera.node.app.spi.fees.FeeContext;
 import com.hedera.node.app.spi.fees.Fees;
-import com.hedera.node.app.spi.key.KeyUtils;
 import com.hedera.node.app.spi.validation.ExpiryMeta;
 import com.hedera.node.app.spi.workflows.HandleContext;
 import com.hedera.node.app.spi.workflows.HandleException;
@@ -191,7 +191,7 @@ public class ContractUpdateHandler implements TransactionHandler {
                 op.hasExpirationTime() ? op.expirationTimeOrThrow().seconds() : NA,
                 op.hasAutoRenewPeriod() ? op.autoRenewPeriodOrThrow().seconds() : NA,
                 null);
-        context.expiryValidator().resolveUpdateAttempt(currentMetadata, updateMeta, false);
+        context.expiryValidator().resolveUpdateAttempt(currentMetadata, updateMeta);
 
         context.storeFactory()
                 .serviceApi(TokenServiceApi.class)

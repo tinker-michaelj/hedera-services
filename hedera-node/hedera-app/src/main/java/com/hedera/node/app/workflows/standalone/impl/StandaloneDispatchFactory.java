@@ -3,15 +3,12 @@ package com.hedera.node.app.workflows.standalone.impl;
 
 import static com.hedera.hapi.node.base.ResponseCodeEnum.OK;
 import static com.hedera.node.app.spi.workflows.HandleContext.DispatchMetadata.EMPTY_METADATA;
-import static com.hedera.node.app.spi.workflows.HandleContext.TransactionCategory.NODE;
-import static com.hedera.node.app.spi.workflows.HandleContext.TransactionCategory.USER;
 import static com.hedera.node.app.workflows.handle.HandleWorkflow.initializeBuilderInfo;
 import static com.hedera.node.app.workflows.handle.dispatch.ChildDispatchFactory.NO_OP_KEY_VERIFIER;
 import static com.hedera.node.app.workflows.prehandle.PreHandleResult.Status.UNKNOWN_FAILURE;
 import static java.util.Objects.requireNonNull;
 
 import com.hedera.hapi.node.base.Key;
-import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.node.base.SignatureMap;
 import com.hedera.hapi.node.base.Transaction;
 import com.hedera.hapi.node.transaction.SignedTransaction;
@@ -49,24 +46,23 @@ import com.hedera.node.app.workflows.handle.RecordDispatch;
 import com.hedera.node.app.workflows.handle.dispatch.ChildDispatchFactory;
 import com.hedera.node.app.workflows.handle.record.TokenContextImpl;
 import com.hedera.node.app.workflows.handle.stack.SavepointStackImpl;
+import com.hedera.node.app.workflows.handle.steps.ParentTxnFactory;
 import com.hedera.node.app.workflows.prehandle.PreHandleResult;
 import com.hedera.node.app.workflows.prehandle.PreHandleWorkflow;
 import com.hedera.node.config.ConfigProvider;
 import com.hedera.node.config.data.BlockStreamConfig;
 import com.hedera.node.config.data.ConsensusConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
-import com.swirlds.platform.system.SoftwareVersion;
-import com.swirlds.platform.system.transaction.ConsensusTransaction;
-import com.swirlds.platform.system.transaction.TransactionWrapper;
 import com.swirlds.state.State;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
 import com.swirlds.state.lifecycle.info.NodeInfo;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.time.Instant;
 import java.util.List;
-import java.util.function.Function;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import org.hiero.consensus.model.transaction.ConsensusTransaction;
+import org.hiero.consensus.model.transaction.TransactionWrapper;
 
 /**
  * Constructs a {@link Dispatch} appropriate for a standalone transaction executor that does not want to enforce
@@ -86,7 +82,6 @@ public class StandaloneDispatchFactory {
     private final ChildDispatchFactory childDispatchFactory;
     private final TransactionDispatcher transactionDispatcher;
     private final NetworkUtilizationManager networkUtilizationManager;
-    private final Function<SemanticVersion, SoftwareVersion> softwareVersionFactory;
     private final TransactionChecker transactionChecker;
 
     @Inject
@@ -103,7 +98,6 @@ public class StandaloneDispatchFactory {
             @NonNull final ChildDispatchFactory childDispatchFactory,
             @NonNull final TransactionDispatcher transactionDispatcher,
             @NonNull final NetworkUtilizationManager networkUtilizationManager,
-            @NonNull final Function<SemanticVersion, SoftwareVersion> softwareVersionFactory,
             @NonNull final TransactionChecker transactionChecker) {
         this.feeManager = requireNonNull(feeManager);
         this.authorizer = requireNonNull(authorizer);
@@ -117,7 +111,6 @@ public class StandaloneDispatchFactory {
         this.exchangeRateManager = requireNonNull(exchangeRateManager);
         this.storeMetricsService = requireNonNull(storeMetricsService);
         this.networkUtilizationManager = requireNonNull(networkUtilizationManager);
-        this.softwareVersionFactory = softwareVersionFactory;
         this.transactionChecker = requireNonNull(transactionChecker);
     }
 
@@ -145,14 +138,13 @@ public class StandaloneDispatchFactory {
                 new BoundaryStateChangeListener(storeMetricsService, () -> config),
                 new KVStateChangeListener(),
                 blockStreamConfig.streamMode());
-        final var readableStoreFactory = new ReadableStoreFactory(stack, softwareVersionFactory);
+        final var readableStoreFactory = new ReadableStoreFactory(stack);
         final var entityIdStore = new WritableEntityIdStore(stack.getWritableStates(EntityIdService.NAME));
         final var consensusTransaction = consensusTransactionFor(transactionBody);
         final var creatorInfo = creatorInfoFor(transactionBody);
         final var preHandleResult = preHandleWorkflow.getCurrentPreHandleResult(
                 creatorInfo, consensusTransaction, readableStoreFactory, ignore -> {});
-        final var tokenContext =
-                new TokenContextImpl(config, stack, consensusNow, entityIdStore, softwareVersionFactory);
+        final var tokenContext = new TokenContextImpl(config, stack, consensusNow, entityIdStore);
         final var txnInfo = requireNonNull(preHandleResult.txInfo());
         final var writableStoreFactory =
                 new WritableStoreFactory(stack, serviceScopeLookup.getServiceName(txnInfo.txBody()), entityIdStore);
@@ -164,8 +156,8 @@ public class StandaloneDispatchFactory {
         final var throttleAdvisor = new AppThrottleAdviser(networkUtilizationManager, consensusNow);
         final var baseBuilder = initializeBuilderInfo(
                 stack.getBaseBuilder(StreamBuilder.class), txnInfo, exchangeRateManager.exchangeRates());
-        final var feeAccumulator =
-                new FeeAccumulator(serviceApiFactory.getApi(TokenServiceApi.class), (FeeStreamBuilder) baseBuilder);
+        final var feeAccumulator = new FeeAccumulator(
+                serviceApiFactory.getApi(TokenServiceApi.class), (FeeStreamBuilder) baseBuilder, stack);
         final var blockRecordInfo = BlockRecordInfoImpl.from(state);
         final var dispatchHandleContext = new DispatchHandleContext(
                 consensusNow,
@@ -209,15 +201,11 @@ public class StandaloneDispatchFactory {
                 preHandleResult.getHollowAccounts(),
                 dispatchHandleContext,
                 stack,
-                getTxnCategory(preHandleResult),
+                ParentTxnFactory.getTxnCategory(preHandleResult),
                 tokenContext,
                 preHandleResult,
                 HandleContext.ConsensusThrottling.ON,
                 null);
-    }
-
-    public static HandleContext.TransactionCategory getTxnCategory(final PreHandleResult preHandleResult) {
-        return requireNonNull(preHandleResult.txInfo()).signatureMap().sigPair().isEmpty() ? NODE : USER;
     }
 
     private ConsensusTransaction consensusTransactionFor(@NonNull final TransactionBody transactionBody) {
@@ -233,7 +221,7 @@ public class StandaloneDispatchFactory {
     }
 
     private NodeInfo creatorInfoFor(@NonNull final TransactionBody transactionBody) {
-        return new NodeInfoImpl(0, transactionBody.nodeAccountIDOrThrow(), 0, List.of(), Bytes.EMPTY);
+        return new NodeInfoImpl(0, transactionBody.nodeAccountIDOrThrow(), 0, List.of(), Bytes.EMPTY, List.of(), false);
     }
 
     private PreHandleResult temporaryPreHandleResult() {

@@ -1,20 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.demo.consistency;
 
-import static com.swirlds.common.utility.ByteUtils.byteArrayToLong;
 import static com.swirlds.logging.legacy.LogMarker.EXCEPTION;
 import static com.swirlds.logging.legacy.LogMarker.STARTUP;
+import static org.hiero.base.utility.ByteUtils.byteArrayToLong;
 
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
 import com.hedera.pbj.runtime.ParseException;
-import com.swirlds.common.constructable.ConstructableIgnored;
 import com.swirlds.common.utility.NonCryptographicHashing;
-import com.swirlds.platform.components.transaction.system.ScopedSystemTransaction;
 import com.swirlds.platform.state.MerkleNodeState;
-import com.swirlds.platform.system.Round;
-import com.swirlds.platform.system.events.Event;
-import com.swirlds.platform.system.transaction.ConsensusTransaction;
-import com.swirlds.platform.system.transaction.Transaction;
 import com.swirlds.state.merkle.MerkleStateRoot;
 import com.swirlds.state.merkle.singleton.StringLeaf;
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -25,6 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.constructable.ConstructableIgnored;
+import org.hiero.consensus.model.event.Event;
+import org.hiero.consensus.model.hashgraph.Round;
+import org.hiero.consensus.model.transaction.ConsensusTransaction;
+import org.hiero.consensus.model.transaction.ScopedSystemTransaction;
+import org.hiero.consensus.model.transaction.Transaction;
 
 /**
  * State for the Consistency Testing Tool
@@ -52,8 +52,8 @@ public class ConsistencyTestingToolState extends MerkleStateRoot<ConsistencyTest
 
     /**
      * The number of rounds handled by this app. Is incremented each time
-     * {@link ConsistencyTestingToolStateLifecycles#onHandleConsensusRound(Round, ConsistencyTestingToolState, Consumer < ScopedSystemTransaction < StateSignatureTransaction >>)} is called. Note that this may not actually equal the round
-     * number, since we don't call {@link ConsistencyTestingToolStateLifecycles#onHandleConsensusRound(Round, ConsistencyTestingToolState, Consumer<ScopedSystemTransaction<StateSignatureTransaction>>)} for rounds with no events.
+     * {@link ConsistencyTestingToolConsensusStateEventHandler#onHandleConsensusRound(Round, ConsistencyTestingToolState, Consumer < ScopedSystemTransaction < StateSignatureTransaction >>)} is called. Note that this may not actually equal the round
+     * number, since we don't call {@link ConsistencyTestingToolConsensusStateEventHandler#onHandleConsensusRound(Round, ConsistencyTestingToolState, Consumer<ScopedSystemTransaction<StateSignatureTransaction>>)} for rounds with no events.
      *
      * <p>
      * Affects the hash of this node.
@@ -127,7 +127,7 @@ public class ConsistencyTestingToolState extends MerkleStateRoot<ConsistencyTest
 
     /**
      * Sets the state
-     * @param stateLong state represtented by a long
+     * @param stateLong state represented by a long
      */
     void setStateLong(final long stateLong) {
         this.stateLong = stateLong;

@@ -17,15 +17,12 @@ mainModuleInfo {
     runtimeOnly("io.helidon.grpc.core")
     runtimeOnly("io.helidon.webclient")
     runtimeOnly("io.helidon.webclient.grpc")
-    runtimeOnly("com.hedera.cryptography.altbn128")
 }
 
 testModuleInfo {
     requires("com.fasterxml.jackson.databind")
     requires("com.google.protobuf")
     requires("com.google.common.jimfs")
-    requires("com.hedera.cryptography.bls")
-    requires("com.hedera.cryptography.pairings.api")
     requires("com.hedera.node.app")
     requires("com.hedera.node.app.spi.test.fixtures")
     requires("com.hedera.node.config.test.fixtures")
@@ -35,6 +32,7 @@ testModuleInfo {
     requires("com.swirlds.state.api.test.fixtures")
     requires("com.swirlds.state.impl.test.fixtures")
     requires("com.swirlds.base.test.fixtures")
+    requires("org.hiero.base.crypto.test.fixtures")
     requires("com.esaulpaugh.headlong")
     requires("org.assertj.core")
     requires("org.bouncycastle.provider")
@@ -45,7 +43,6 @@ testModuleInfo {
     requires("tuweni.bytes")
     requires("uk.org.webcompere.systemstubs.core")
     requires("uk.org.webcompere.systemstubs.jupiter")
-    requiresStatic("com.github.spotbugs.annotations")
 }
 
 jmhModuleInfo {
@@ -55,8 +52,8 @@ jmhModuleInfo {
     requires("com.hedera.node.app.test.fixtures")
     requires("com.hedera.node.hapi")
     requires("com.hedera.pbj.runtime")
-    requires("com.swirlds.common")
     requires("jmh.core")
+    requires("org.hiero.base.crypto")
 }
 
 // Add all the libs dependencies into the jar manifest!

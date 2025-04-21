@@ -9,9 +9,6 @@ import com.hedera.node.internal.network.Network;
 import com.hedera.node.internal.network.NodeMetadata;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import com.swirlds.common.RosterStateId;
-import com.swirlds.common.crypto.CryptographyException;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.platform.crypto.CryptoStatic;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.service.ReadableRosterStore;
@@ -33,6 +30,9 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.hiero.base.crypto.CryptographyException;
+import org.hiero.base.crypto.Hash;
+import org.hiero.consensus.model.node.NodeId;
 
 /**
  * A utility class to help use Rooster and RosterEntry instances.
@@ -212,6 +212,20 @@ public final class RosterUtils {
     }
 
     /**
+     * Returns a NodeId with a given index
+     *
+     * @param roster a roster
+     * @param nodeIndex an index of the node
+     * @return a NodeId
+     * @throws IndexOutOfBoundsException if the index does not exist in the roster
+     */
+    @NonNull
+    public static NodeId getNodeId(@NonNull final Roster roster, final int nodeIndex) {
+        return NodeId.of(
+                Objects.requireNonNull(roster).rosterEntries().get(nodeIndex).nodeId());
+    }
+
+    /**
      * Retrieves the roster entry that matches the specified node ID, returning null if one does not exist.
      * <p>
      * Useful for one-off look-ups. If code needs to look up multiple entries by NodeId, then the code should use the
@@ -249,12 +263,11 @@ public final class RosterUtils {
     /**
      * Build an instance of RosterHistory from the current/previous rosters as reported by the RosterRetriever.
      * <p>
-     * The RosterRetriever implementation fetches the rosters from the RosterState/RosterMap,
-     * and automatically falls back to fetching them from the PlatformState if the RosterState is empty.
+     * The RosterRetriever implementation fetches the rosters from the RosterState/RosterMap.
      *
      * @param state a State object to fetch data from
      * @return a RosterHistory
-     * @deprecated To be removed once AddressBook to Roster refactoring is complete.
+     * @deprecated To be removed once AddressBook to Roster refactoring is complete and Browser/Turtle stop using it
      */
     @Deprecated(forRemoval = true)
     @NonNull
@@ -268,7 +281,7 @@ public final class RosterUtils {
         roundRosterPairList.add(new RoundRosterPair(platformStateFacade.roundOf(state), currentHash));
         rosterMap.put(currentHash, currentRoster);
 
-        final Roster previousRoster = RosterRetriever.retrievePreviousRoster(state, platformStateFacade);
+        final Roster previousRoster = RosterRetriever.retrievePreviousRoster(state);
         if (previousRoster != null) {
             final Bytes previousHash = RosterUtils.hash(previousRoster).getBytes();
             roundRosterPairList.add(new RoundRosterPair(0, previousHash));
@@ -282,15 +295,15 @@ public final class RosterUtils {
      * Creates the Roster History to be used by Platform.
      *
      * @param rosterStore the roster store containing the active rosters.
-     * @return the roster history if roster store contains active rosters, otherwise IllegalStateException is thrown.
+     * @return the roster history if roster store contains active rosters, otherwise NullPointerException is thrown.
      */
     @NonNull
     public static RosterHistory createRosterHistory(@NonNull final ReadableRosterStore rosterStore) {
         final var roundRosterPairs = rosterStore.getRosterHistory();
-        final var rosterMap = roundRosterPairs.stream()
-                .collect(Collectors.toMap(
-                        RoundRosterPair::activeRosterHash,
-                        pair -> Objects.requireNonNull(rosterStore.get(pair.activeRosterHash()))));
+        final Map<Bytes, Roster> rosterMap = new HashMap<>();
+        for (final var pair : roundRosterPairs) {
+            rosterMap.put(pair.activeRosterHash(), Objects.requireNonNull(rosterStore.get(pair.activeRosterHash())));
+        }
         return new RosterHistory(roundRosterPairs, rosterMap);
     }
 

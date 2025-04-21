@@ -2,10 +2,9 @@
 package com.hedera.node.app.service.file.impl.schemas;
 
 import static com.hedera.hapi.node.base.HederaFunctionality.fromString;
-import static com.swirlds.common.utility.CommonUtils.hex;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
-import static java.util.Spliterator.DISTINCT;
+import static org.hiero.base.utility.CommonUtils.hex;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,7 +33,6 @@ import com.hedera.hapi.node.state.primitives.ProtoBytes;
 import com.hedera.hapi.node.transaction.ExchangeRate;
 import com.hedera.hapi.node.transaction.ExchangeRateSet;
 import com.hedera.hapi.node.transaction.ThrottleDefinitions;
-import com.hedera.hapi.node.transaction.TransactionBody;
 import com.hedera.node.app.service.addressbook.ReadableNodeStore;
 import com.hedera.node.app.spi.workflows.SystemContext;
 import com.hedera.node.config.ConfigProvider;
@@ -68,8 +66,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Spliterators;
-import java.util.stream.StreamSupport;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.apache.logging.log4j.LogManager;
@@ -160,8 +156,7 @@ public class V0490FileSchema extends Schema {
         // Create the address book file
         final var addressBookFileNum = filesConfig.addressBook();
         systemContext.dispatchCreation(
-                TransactionBody.newBuilder()
-                        .fileCreate(FileCreateTransactionBody.newBuilder()
+                b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                 .contents(nodeStoreAddressBook(nodeStore))
                                 .keys(masterKey)
                                 .expirationTime(maxLifetimeExpiry(systemContext))
@@ -171,8 +166,7 @@ public class V0490FileSchema extends Schema {
 
         final var nodeInfoFileNum = filesConfig.nodeDetails();
         systemContext.dispatchCreation(
-                TransactionBody.newBuilder()
-                        .fileCreate(FileCreateTransactionBody.newBuilder()
+                b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                 .contents(nodeStoreNodeDetails(nodeStore))
                                 .keys(masterKey)
                                 .expirationTime(maxLifetimeExpiry(systemContext))
@@ -198,8 +192,8 @@ public class V0490FileSchema extends Schema {
      * Given a {@link SystemContext}, dispatches a synthetic file update transaction for the given file ID and contents.
      *
      * @param systemContext the system context
-     * @param fileId the file ID
-     * @param contents the contents of the file
+     * @param fileId        the file ID
+     * @param contents      the contents of the file
      */
     public static void dispatchSynthFileUpdate(
             @NonNull final SystemContext systemContext, @NonNull final FileID fileId, @NonNull final Bytes contents) {
@@ -212,7 +206,7 @@ public class V0490FileSchema extends Schema {
 
     public Bytes nodeStoreNodeDetails(@NonNull final ReadableNodeStore nodeStore) {
         final var nodeDetails = new ArrayList<NodeAddress>();
-        StreamSupport.stream(Spliterators.spliterator(nodeStore.keys(), nodeStore.sizeOfState(), DISTINCT), false)
+        nodeStore.keys().stream()
                 .mapToLong(EntityNumber::number)
                 .mapToObj(nodeStore::get)
                 .filter(node -> node != null && !node.deleted())
@@ -238,7 +232,7 @@ public class V0490FileSchema extends Schema {
 
     public Bytes nodeStoreAddressBook(@NonNull final ReadableNodeStore nodeStore) {
         final var nodeAddresses = new ArrayList<NodeAddress>();
-        StreamSupport.stream(Spliterators.spliterator(nodeStore.keys(), nodeStore.sizeOfState(), DISTINCT), false)
+        nodeStore.keys().stream()
                 .mapToLong(EntityNumber::number)
                 .mapToObj(nodeStore::get)
                 .filter(node -> node != null && !node.deleted())
@@ -263,8 +257,7 @@ public class V0490FileSchema extends Schema {
         final var masterKey =
                 Key.newBuilder().ed25519(bootstrapConfig.genesisPublicKey()).build();
         systemContext.dispatchCreation(
-                TransactionBody.newBuilder()
-                        .fileCreate(FileCreateTransactionBody.newBuilder()
+                b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                 .contents(genesisFeeSchedules(config))
                                 .keys(KeyList.newBuilder().keys(masterKey))
                                 .expirationTime(maxLifetimeExpiry(systemContext))
@@ -387,8 +380,7 @@ public class V0490FileSchema extends Schema {
                 .ed25519(config.getConfigData(BootstrapConfig.class).genesisPublicKey())
                 .build();
         systemContext.dispatchCreation(
-                TransactionBody.newBuilder()
-                        .fileCreate(FileCreateTransactionBody.newBuilder()
+                b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                 .contents(genesisExchangeRates(config))
                                 .keys(KeyList.newBuilder().keys(masterKey))
                                 .expirationTime(maxLifetimeExpiry(systemContext))
@@ -431,8 +423,7 @@ public class V0490FileSchema extends Schema {
         final var masterKey =
                 Key.newBuilder().ed25519(bootstrapConfig.genesisPublicKey()).build();
         systemContext.dispatchCreation(
-                TransactionBody.newBuilder()
-                        .fileCreate(FileCreateTransactionBody.newBuilder()
+                b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                 .contents(genesisNetworkProperties(config))
                                 .keys(KeyList.newBuilder().keys(masterKey))
                                 .expirationTime(maxLifetimeExpiry(systemContext))
@@ -461,8 +452,7 @@ public class V0490FileSchema extends Schema {
         final var masterKey =
                 Key.newBuilder().ed25519(bootstrapConfig.genesisPublicKey()).build();
         systemContext.dispatchCreation(
-                TransactionBody.newBuilder()
-                        .fileCreate(FileCreateTransactionBody.newBuilder()
+                b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                 .contents(genesisHapiPermissions(config))
                                 .keys(KeyList.newBuilder().keys(masterKey))
                                 .expirationTime(maxLifetimeExpiry(systemContext))
@@ -535,8 +525,7 @@ public class V0490FileSchema extends Schema {
         final var masterKey =
                 Key.newBuilder().ed25519(bootstrapConfig.genesisPublicKey()).build();
         systemContext.dispatchCreation(
-                TransactionBody.newBuilder()
-                        .fileCreate(FileCreateTransactionBody.newBuilder()
+                b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                 .contents(genesisThrottleDefinitions(config))
                                 .keys(KeyList.newBuilder().keys(masterKey))
                                 .expirationTime(maxLifetimeExpiry(systemContext))
@@ -648,8 +637,7 @@ public class V0490FileSchema extends Schema {
         // initializing the files 150 -159
         for (var updateNum = updateFilesRange.left(); updateNum <= updateFilesRange.right(); updateNum++) {
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder()
-                            .fileCreate(FileCreateTransactionBody.newBuilder()
+                    b -> b.fileCreate(FileCreateTransactionBody.newBuilder()
                                     .contents(Bytes.EMPTY)
                                     .keys(KeyList.newBuilder().keys(masterKey))
                                     .expirationTime(maxLifetimeExpiry(systemContext))

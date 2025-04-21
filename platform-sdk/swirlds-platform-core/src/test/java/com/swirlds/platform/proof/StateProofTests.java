@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.platform.proof;
 
-import static com.swirlds.common.test.fixtures.RandomUtils.getRandomPrintSeed;
-import static com.swirlds.common.test.fixtures.RandomUtils.randomHash;
-import static com.swirlds.common.test.fixtures.RandomUtils.randomSignature;
 import static com.swirlds.common.test.fixtures.merkle.util.MerkleTestUtils.buildLessSimpleTree;
 import static com.swirlds.common.test.fixtures.merkle.util.MerkleTestUtils.buildLessSimpleTreeExtended;
 import static com.swirlds.common.test.fixtures.merkle.util.MerkleTestUtils.buildSizeOneTree;
 import static com.swirlds.common.utility.Threshold.MAJORITY;
 import static com.swirlds.common.utility.Threshold.STRONG_MINORITY;
 import static com.swirlds.common.utility.Threshold.SUPER_MAJORITY;
+import static org.hiero.base.crypto.test.fixtures.CryptoRandomUtils.randomHash;
+import static org.hiero.base.crypto.test.fixtures.CryptoRandomUtils.randomSignature;
+import static org.hiero.base.utility.test.fixtures.RandomUtils.getRandomPrintSeed;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -17,20 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.constructable.ConstructableRegistryException;
-import com.swirlds.common.crypto.Cryptography;
-import com.swirlds.common.crypto.CryptographyFactory;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.common.crypto.Signature;
-import com.swirlds.common.io.streams.SerializableDataInputStream;
-import com.swirlds.common.io.streams.SerializableDataOutputStream;
 import com.swirlds.common.merkle.MerkleLeaf;
 import com.swirlds.common.merkle.MerkleNode;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
 import com.swirlds.common.merkle.interfaces.MerkleType;
 import com.swirlds.common.merkle.route.MerkleRouteFactory;
-import com.swirlds.common.platform.NodeId;
+import com.swirlds.common.test.fixtures.merkle.TestMerkleCryptoFactory;
 import com.swirlds.common.utility.Threshold;
 import com.swirlds.platform.system.address.Address;
 import com.swirlds.platform.system.address.AddressBook;
@@ -47,6 +38,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.constructable.ConstructableRegistryException;
+import org.hiero.base.crypto.Cryptography;
+import org.hiero.base.crypto.CryptographyProvider;
+import org.hiero.base.crypto.Hash;
+import org.hiero.base.crypto.Signature;
+import org.hiero.base.io.streams.SerializableDataInputStream;
+import org.hiero.base.io.streams.SerializableDataOutputStream;
+import org.hiero.consensus.model.node.NodeId;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,7 +55,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("StateProof Tests")
 class StateProofTests {
-    private static final Cryptography CRYPTOGRAPHY = CryptographyFactory.create();
+    private static final Cryptography CRYPTOGRAPHY = CryptographyProvider.getInstance();
 
     @BeforeAll
     static void beforeAll() throws ConstructableRegistryException {
@@ -127,7 +127,7 @@ class StateProofTests {
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
         final MerkleNode root = buildLessSimpleTree();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         final AddressBook addressBook =
                 RandomAddressBookBuilder.create(random).withSize(10).build();
@@ -163,7 +163,7 @@ class StateProofTests {
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
         final MerkleNode root = buildSizeOneTree();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         final AddressBook addressBook =
                 RandomAddressBookBuilder.create(random).withSize(10).build();
@@ -198,7 +198,7 @@ class StateProofTests {
 
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         final AddressBook addressBook = RandomAddressBookBuilder.create(random)
                 .withSize(random.nextInt(1, 10))
@@ -256,7 +256,7 @@ class StateProofTests {
         final Threshold threshold = Threshold.values()[thresholdOrdinal];
 
         final MerkleNode root = buildLessSimpleTreeExtended();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
         final List<MerkleLeaf> leafNodes = new ArrayList<>();
         root.treeIterator().setFilter(MerkleType::isLeaf).forEachRemaining(node -> leafNodes.add(node.asLeaf()));
 
@@ -291,7 +291,7 @@ class StateProofTests {
         }
 
         // Now, rehash the tree using the incorrect leaf hashes.
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         final AddressBook addressBook = RandomAddressBookBuilder.create(random)
                 .withSize(random.nextInt(1, 10))
@@ -348,7 +348,7 @@ class StateProofTests {
         final Random random = getRandomPrintSeed();
 
         final MerkleNode root = buildLessSimpleTreeExtended();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
         final List<MerkleLeaf> leafNodes = new ArrayList<>();
         root.treeIterator().setFilter(MerkleType::isLeaf).forEachRemaining(node -> leafNodes.add(node.asLeaf()));
         Collections.shuffle(leafNodes, random);
@@ -395,7 +395,7 @@ class StateProofTests {
         final Random random = getRandomPrintSeed();
 
         final MerkleNode root = buildLessSimpleTreeExtended();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
         final List<MerkleLeaf> leafNodes = new ArrayList<>();
         root.treeIterator().setFilter(MerkleType::isLeaf).forEachRemaining(node -> leafNodes.add(node.asLeaf()));
         Collections.shuffle(leafNodes, random);
@@ -435,7 +435,7 @@ class StateProofTests {
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
         final MerkleNode root = buildLessSimpleTree();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         // For this test, there will be 9 total weight,
         // with the node at index 9 having 0 stake, and all others having a weight of 1.
@@ -498,7 +498,7 @@ class StateProofTests {
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
         final MerkleNode root = buildLessSimpleTree();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         // For this test, there will be 9 total weight, with each node having a weight of 1.
         final AddressBook addressBook =
@@ -566,7 +566,7 @@ class StateProofTests {
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
         final MerkleNode root = buildLessSimpleTree();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         // For this test, there will be 9 total weight, with each node having a weight of 1.
         final AddressBook addressBook =
@@ -632,7 +632,7 @@ class StateProofTests {
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
         final MerkleNode root = buildLessSimpleTree();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         // For this test, there will be 9 total weight, with each node having a weight of 1.
         final AddressBook addressBook =
@@ -689,7 +689,7 @@ class StateProofTests {
         final FakeSignatureBuilder signatureBuilder = new FakeSignatureBuilder(random);
 
         final MerkleNode root = buildLessSimpleTree();
-        MerkleCryptoFactory.getInstance().digestTreeSync(root);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(root);
 
         // For this test, there will be 12 total weight, with each node having a weight of 1.
         // 12 is chosen because it is divisible by both 2 and 3.

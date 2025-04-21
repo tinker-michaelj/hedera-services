@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.common.merkle.synchronization.views;
 
-import com.swirlds.common.crypto.Cryptography;
-import com.swirlds.common.crypto.Hash;
 import com.swirlds.common.io.streams.MerkleDataInputStream;
 import com.swirlds.common.io.streams.MerkleDataOutputStream;
-import com.swirlds.common.io.streams.SerializableDataInputStream;
-import com.swirlds.common.io.streams.SerializableDataOutputStream;
 import com.swirlds.common.merkle.MerkleNode;
 import com.swirlds.common.merkle.synchronization.LearningSynchronizer;
 import com.swirlds.common.merkle.synchronization.stats.ReconnectMapStats;
@@ -16,6 +12,10 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import java.io.IOException;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicReference;
+import org.hiero.base.crypto.Cryptography;
+import org.hiero.base.crypto.Hash;
+import org.hiero.base.io.streams.SerializableDataInputStream;
+import org.hiero.base.io.streams.SerializableDataOutputStream;
 
 /**
  * A "view" into a merkle tree (or subtree) used to perform a reconnect operation. This view is used to access
@@ -98,7 +98,7 @@ public interface LearnerTreeView<T> extends LearnerExpectedLessonQueue<T>, Learn
 
     /**
      * Get the hash of a node. If this view represents a tree that has null nodes within it, those nodes should cause
-     * this method to return a {@link Cryptography#getNullHash() null hash}.
+     * this method to return a {@link Cryptography#NULL_HASH null hash}.
      *
      * @param node
      * 		the node

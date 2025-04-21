@@ -5,9 +5,6 @@ import static com.swirlds.base.units.UnitConstants.NANOSECONDS_TO_SECONDS;
 import static com.swirlds.logging.legacy.LogMarker.EXCEPTION;
 
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
-import com.swirlds.common.platform.NodeId;
-import com.swirlds.platform.components.transaction.system.ScopedSystemTransaction;
-import com.swirlds.platform.internal.ConsensusRound;
 import com.swirlds.platform.metrics.StateMetrics;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -15,6 +12,9 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.consensus.model.hashgraph.ConsensusRound;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.transaction.ScopedSystemTransaction;
 
 public class TransactionHandler {
 
@@ -37,12 +37,14 @@ public class TransactionHandler {
      *
      * @param round
      * 		the round to apply
-     * @param stateLifecycles
-     * 		the stateLifecycles to apply {@code round} to
+     * @param consensusStateEventHandler
+     * 		the consensusStateEventHandler to apply {@code round} to
      * @param stateRoot the state root to apply {@code round} to
      */
     public <T extends MerkleNodeState> Queue<ScopedSystemTransaction<StateSignatureTransaction>> handleRound(
-            final ConsensusRound round, final StateLifecycles<MerkleNodeState> stateLifecycles, final T stateRoot) {
+            final ConsensusRound round,
+            final ConsensusStateEventHandler<MerkleNodeState> consensusStateEventHandler,
+            final T stateRoot) {
         final Queue<ScopedSystemTransaction<StateSignatureTransaction>> scopedSystemTransactions =
                 new ConcurrentLinkedQueue<>();
 
@@ -50,7 +52,7 @@ public class TransactionHandler {
             final Instant timeOfHandle = Instant.now();
             final long startTime = System.nanoTime();
 
-            stateLifecycles.onHandleConsensusRound(round, stateRoot, scopedSystemTransactions::add);
+            consensusStateEventHandler.onHandleConsensusRound(round, stateRoot, scopedSystemTransactions::add);
 
             final double secondsElapsed = (System.nanoTime() - startTime) * NANOSECONDS_TO_SECONDS;
 
@@ -66,7 +68,7 @@ public class TransactionHandler {
         } catch (final Throwable t) {
             logger.error(
                     EXCEPTION.getMarker(),
-                    "error invoking StateLifecycles.onHandleConsensusRound() [ nodeId = {} ] with round {}",
+                    "error invoking ConsensusStateEventHandler.onHandleConsensusRound() [ nodeId = {} ] with round {}",
                     selfId,
                     round.getRoundNum(),
                     t);

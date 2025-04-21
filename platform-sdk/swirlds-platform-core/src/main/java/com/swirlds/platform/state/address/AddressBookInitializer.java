@@ -7,12 +7,10 @@ import static com.swirlds.platform.roster.RosterRetriever.retrieveActiveOrGenesi
 import static com.swirlds.platform.roster.RosterUtils.buildAddressBook;
 
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.platform.config.AddressBookConfig;
-import com.swirlds.platform.state.StateLifecycles;
+import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.SignedState;
-import com.swirlds.platform.system.SoftwareVersion;
 import com.swirlds.platform.system.address.Address;
 import com.swirlds.platform.system.address.AddressBook;
 import com.swirlds.platform.system.address.AddressBookValidator;
@@ -32,6 +30,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.consensus.model.node.NodeId;
 
 /**
  * Determines the initial address book to use at platform start and validates it.
@@ -64,10 +63,7 @@ public class AddressBookInitializer {
     private final PlatformContext platformContext;
 
     @NonNull
-    private final StateLifecycles stateLifecycles;
-    /** The current version of the application from config.txt. */
-    @NonNull
-    private final SoftwareVersion currentVersion;
+    private final ConsensusStateEventHandler consensusStateEventHandler;
     /** Indicate that the software version has upgraded. */
     private final boolean softwareUpgrade;
     /** The initial state. Must not be null. */
@@ -100,7 +96,6 @@ public class AddressBookInitializer {
      * the state on upgrade.
      *
      * @param selfId The id of this node.
-     * @param currentVersion The current version of the application.
      * @param softwareUpgrade Indicate that the software version has upgraded.
      * @param initialState The initial state to start from.
      * @param configAddressBook The address book derived from config.txt.
@@ -108,19 +103,17 @@ public class AddressBookInitializer {
      */
     public AddressBookInitializer(
             @NonNull final NodeId selfId,
-            @NonNull final SoftwareVersion currentVersion,
             final boolean softwareUpgrade,
             @NonNull final SignedState initialState,
             @NonNull final AddressBook configAddressBook,
             @NonNull final PlatformContext platformContext,
-            @NonNull final StateLifecycles stateLifecycles,
+            @NonNull final ConsensusStateEventHandler consensusStateEventHandler,
             @NonNull final PlatformStateFacade platformStateFacade) {
         this.selfId = Objects.requireNonNull(selfId, "The selfId must not be null.");
-        this.currentVersion = Objects.requireNonNull(currentVersion, "The currentVersion must not be null.");
         this.softwareUpgrade = softwareUpgrade;
         this.configAddressBook = Objects.requireNonNull(configAddressBook, "The configAddressBook must not be null.");
         this.platformContext = Objects.requireNonNull(platformContext, "The platformContext must not be null.");
-        this.stateLifecycles = stateLifecycles;
+        this.consensusStateEventHandler = consensusStateEventHandler;
         final AddressBookConfig addressBookConfig =
                 platformContext.getConfiguration().getConfigData(AddressBookConfig.class);
         this.initialState = Objects.requireNonNull(initialState, "The initialState must not be null.");
@@ -224,7 +217,7 @@ public class AddressBookInitializer {
                     "The address book weight may be updated by the application using data from the state snapshot.");
 
             AddressBook configAddressBookCopy = configAddressBook.copy();
-            stateLifecycles.onUpdateWeight(initialState.getState(), configAddressBookCopy, platformContext);
+            consensusStateEventHandler.onUpdateWeight(initialState.getState(), configAddressBookCopy, platformContext);
             candidateAddressBook = configAddressBookCopy;
             candidateAddressBook = checkCandidateAddressBookValidity(candidateAddressBook);
             previousAddressBook = stateAddressBook;
@@ -298,8 +291,7 @@ public class AddressBookInitializer {
      */
     private synchronized void recordAddressBooks(@NonNull final AddressBook usedAddressBook) {
         final String date = DATE_TIME_FORMAT.format(Instant.now());
-        final String addressBookFileName =
-                "%s_v%s_%s_node_%s.txt".formatted(ADDRESS_BOOK_FILE_PREFIX, currentVersion.getVersion(), date, selfId);
+        final String addressBookFileName = "%s_v%s_%s_node_%s.txt".formatted(ADDRESS_BOOK_FILE_PREFIX, 1, date, selfId);
         final String addressBookDebugFileName = addressBookFileName + ".debug";
         try {
             final File debugFile = Path.of(this.pathToAddressBookDirectory.toString(), addressBookDebugFileName)

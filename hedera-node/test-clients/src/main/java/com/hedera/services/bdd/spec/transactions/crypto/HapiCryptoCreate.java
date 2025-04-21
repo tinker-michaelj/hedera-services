@@ -30,6 +30,7 @@ import com.hedera.services.bdd.spec.transactions.HapiTxnOp;
 import com.hedera.services.bdd.spec.transactions.contract.HapiParserUtil;
 import com.hedera.services.bdd.spec.transactions.lambda.HookInstaller;
 import com.hederahashgraph.api.proto.java.AccountID;
+import com.hederahashgraph.api.proto.java.ContractID;
 import com.hederahashgraph.api.proto.java.CryptoCreateTransactionBody;
 import com.hederahashgraph.api.proto.java.Duration;
 import com.hederahashgraph.api.proto.java.FeeData;
@@ -61,6 +62,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
     private boolean recharging = false;
 
     private boolean advertiseCreation = false;
+    private boolean asCallableContract = false;
     private boolean forgettingEverything = false;
     /** The time window (unit of second) of not doing another recharge if just recharged recently */
     private Optional<Integer> rechargeWindow = Optional.empty();
@@ -118,6 +120,11 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
 
     public HapiCryptoCreate advertisingCreation() {
         advertiseCreation = true;
+        return this;
+    }
+
+    public HapiCryptoCreate asCallableContract() {
+        asCallableContract = true;
         return this;
     }
 
@@ -356,6 +363,16 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
                             "Created account '%s' with id '%s'.",
                             account, asAccountString(lastReceipt.getAccountID())));
             log.info(banner);
+        }
+        if (asCallableContract) {
+            spec.registry()
+                    .saveContractId(
+                            account,
+                            ContractID.newBuilder()
+                                    .setShardNum(createdAccountId.getShardNum())
+                                    .setRealmNum(createdAccountId.getRealmNum())
+                                    .setContractNum(createdAccountId.getAccountNum())
+                                    .build());
         }
     }
 

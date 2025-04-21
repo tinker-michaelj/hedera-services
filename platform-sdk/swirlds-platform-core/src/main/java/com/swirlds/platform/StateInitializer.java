@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.platform;
 
-import static com.swirlds.common.threading.interrupt.Uninterruptable.abortAndThrowIfInterrupted;
 import static com.swirlds.logging.legacy.LogMarker.STARTUP;
 import static com.swirlds.platform.system.InitTrigger.GENESIS;
 import static com.swirlds.platform.system.InitTrigger.RESTART;
-import static com.swirlds.platform.system.SoftwareVersion.NO_VERSION;
+import static org.hiero.base.concurrent.interrupt.Uninterruptable.abortAndThrowIfInterrupted;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
 import com.swirlds.platform.config.StateConfig;
+import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.state.MerkleNodeState;
-import com.swirlds.platform.state.StateLifecycles;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.SignedState;
 import com.swirlds.platform.system.InitTrigger;
 import com.swirlds.platform.system.Platform;
-import com.swirlds.platform.system.SoftwareVersion;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
@@ -24,7 +22,7 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * Encapsulates the logic for calling
- * {@link StateLifecycles#onStateInitialized(MerkleNodeState, Platform, InitTrigger, SoftwareVersion)}
+ * {@link ConsensusStateEventHandler#onStateInitialized(MerkleNodeState, Platform, InitTrigger, SemanticVersion)}
  * startup time.
  */
 public final class StateInitializer {
@@ -44,14 +42,14 @@ public final class StateInitializer {
             @NonNull final Platform platform,
             @NonNull final PlatformContext platformContext,
             @NonNull final SignedState signedState,
-            @NonNull final StateLifecycles stateLifecycles,
+            @NonNull final ConsensusStateEventHandler consensusStateEventHandler,
             @NonNull final PlatformStateFacade platformStateFacade) {
 
-        final SoftwareVersion previousSoftwareVersion;
+        final SemanticVersion previousSoftwareVersion;
         final InitTrigger trigger;
 
         if (signedState.isGenesisState()) {
-            previousSoftwareVersion = NO_VERSION;
+            previousSoftwareVersion = null;
             trigger = GENESIS;
         } else {
             previousSoftwareVersion = platformStateFacade.creationSoftwareVersionOf(signedState.getState());
@@ -68,12 +66,14 @@ public final class StateInitializer {
         }
 
         signedState.init(platformContext);
-        stateLifecycles.onStateInitialized(signedState.getState(), platform, trigger, previousSoftwareVersion);
+        consensusStateEventHandler.onStateInitialized(
+                signedState.getState(), platform, trigger, previousSoftwareVersion);
 
         abortAndThrowIfInterrupted(
                 () -> {
                     try {
-                        MerkleCryptoFactory.getInstance()
+                        platformContext
+                                .getMerkleCryptography()
                                 .digestTreeAsync(initialState.getRoot())
                                 .get();
                     } catch (final ExecutionException e) {

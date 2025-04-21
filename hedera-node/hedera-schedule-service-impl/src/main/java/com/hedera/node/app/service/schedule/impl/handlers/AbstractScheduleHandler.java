@@ -24,11 +24,11 @@ import com.hedera.hapi.node.base.ResponseCodeEnum;
 import com.hedera.hapi.node.base.ScheduleID;
 import com.hedera.hapi.node.state.schedule.Schedule;
 import com.hedera.hapi.node.transaction.TransactionBody;
+import com.hedera.node.app.hapi.utils.keys.KeyComparator;
 import com.hedera.node.app.service.schedule.ReadableScheduleStore;
 import com.hedera.node.app.service.schedule.ScheduleStreamBuilder;
 import com.hedera.node.app.service.token.ReadableAccountStore;
 import com.hedera.node.app.spi.fees.FeeCharging;
-import com.hedera.node.app.spi.key.KeyComparator;
 import com.hedera.node.app.spi.signatures.VerificationAssistant;
 import com.hedera.node.app.spi.workflows.DispatchOptions;
 import com.hedera.node.app.spi.workflows.DispatchOptions.PropagateFeeChargingStrategy;
@@ -418,7 +418,8 @@ public abstract class AbstractScheduleHandler {
         if (contractId.hasContractNum()) {
             effectiveId = contractId;
         } else if (contractId.hasEvmAddress()) {
-            final var accountId = accountStore.getAccountIDByAlias(contractId.evmAddressOrThrow());
+            final var accountId = accountStore.getAccountIDByAlias(
+                    contractId.shardNum(), contractId.realmNum(), contractId.evmAddressOrThrow());
             if (accountId != null) {
                 effectiveId = ContractID.newBuilder()
                         .shardNum(accountId.shardNum())

@@ -13,12 +13,7 @@ package com.swirlds.demo.addressbook;
 
 import static com.swirlds.logging.legacy.LogMarker.STARTUP;
 
-import com.swirlds.common.constructable.ConstructableIgnored;
-import com.swirlds.common.utility.ByteUtils;
 import com.swirlds.platform.state.MerkleNodeState;
-import com.swirlds.platform.system.Round;
-import com.swirlds.platform.system.transaction.ConsensusTransaction;
-import com.swirlds.platform.system.transaction.Transaction;
 import com.swirlds.state.merkle.MerkleStateRoot;
 import com.swirlds.state.merkle.singleton.StringLeaf;
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -26,6 +21,11 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.constructable.ConstructableIgnored;
+import org.hiero.base.utility.ByteUtils;
+import org.hiero.consensus.model.hashgraph.Round;
+import org.hiero.consensus.model.transaction.ConsensusTransaction;
+import org.hiero.consensus.model.transaction.Transaction;
 
 /**
  * State for the AddressBookTestingTool.
@@ -52,8 +52,8 @@ public class AddressBookTestingToolState extends MerkleStateRoot<AddressBookTest
 
     /**
      * The number of rounds handled by this app. Is incremented each time
-     * {@link AddressBookTestingToolStateLifecycles#onHandleConsensusRound(Round, AddressBookTestingToolState, Consumer)} is called. Note that this may not actually equal the round
-     * number, since we don't call {@link AddressBookTestingToolStateLifecycles#onHandleConsensusRound(Round, AddressBookTestingToolState, Consumer)} for rounds with no events.
+     * {@link AddressBookTestingToolConsensusStateEventHandler#onHandleConsensusRound(Round, AddressBookTestingToolState, Consumer)} is called. Note that this may not actually equal the round
+     * number, since we don't call {@link AddressBookTestingToolConsensusStateEventHandler#onHandleConsensusRound(Round, AddressBookTestingToolState, Consumer)} for rounds with no events.
      *
      * <p>
      * Affects the hash of this node.

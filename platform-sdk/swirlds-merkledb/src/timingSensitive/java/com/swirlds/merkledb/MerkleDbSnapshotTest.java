@@ -8,21 +8,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.swirlds.common.constructable.ClassConstructorPair;
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.crypto.DigestType;
-import com.swirlds.common.crypto.Hash;
 import com.swirlds.common.io.streams.MerkleDataInputStream;
 import com.swirlds.common.io.streams.MerkleDataOutputStream;
 import com.swirlds.common.io.utility.LegacyTemporaryFileBuilder;
 import com.swirlds.common.merkle.MerkleInternal;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
 import com.swirlds.common.merkle.impl.PartialNaryMerkleInternal;
 import com.swirlds.common.metrics.config.MetricsConfig;
 import com.swirlds.common.metrics.platform.DefaultPlatformMetrics;
 import com.swirlds.common.metrics.platform.MetricKeyRegistry;
 import com.swirlds.common.metrics.platform.PlatformMetricsFactoryImpl;
 import com.swirlds.common.test.fixtures.AssertionUtils;
+import com.swirlds.common.test.fixtures.merkle.TestMerkleCryptoFactory;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.config.extensions.test.fixtures.TestConfigBuilder;
 import com.swirlds.merkledb.config.MerkleDbConfig;
@@ -47,6 +43,10 @@ import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
+import org.hiero.base.constructable.ClassConstructorPair;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.crypto.DigestType;
+import org.hiero.base.crypto.Hash;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -70,6 +70,7 @@ class MerkleDbSnapshotTest {
     static void setup() throws Exception {
         ConstructableRegistry registry = ConstructableRegistry.getInstance();
         registry.registerConstructables("com.swirlds.common");
+        registry.registerConstructables("org.hiero.consensus");
         registry.registerConstructables("com.swirlds.merkledb");
         registry.registerConstructables("com.swirlds.virtualmap");
         registry.registerConstructable(new ClassConstructorPair(
@@ -152,7 +153,7 @@ class MerkleDbSnapshotTest {
                 }
             }
             if (j == ITERATIONS / 2) {
-                MerkleCryptoFactory.getInstance().digestTreeSync(stateRoot);
+                TestMerkleCryptoFactory.getInstance().digestTreeSync(stateRoot);
                 final MerkleDataOutputStream out = new MerkleDataOutputStream(
                         Files.newOutputStream(snapshotFile, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE));
                 out.writeMerkleTree(snapshotDir, stateRoot);
@@ -223,7 +224,7 @@ class MerkleDbSnapshotTest {
         startSnapshotLatch.await();
         assertEventuallyTrue(() -> lastRoot.get() != null, Duration.ofSeconds(10), "lastRoot is null");
 
-        MerkleCryptoFactory.getInstance().digestTreeSync(rootToSnapshot.get());
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(rootToSnapshot.get());
         final Path snapshotDir = LegacyTemporaryFileBuilder.buildTemporaryDirectory("snapshotAsync", CONFIGURATION);
         final Path snapshotFile = snapshotDir.resolve("state.swh");
         final MerkleDataOutputStream out = new MerkleDataOutputStream(

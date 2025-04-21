@@ -21,16 +21,13 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.swirlds.base.state.MutabilityException;
 import com.swirlds.base.test.fixtures.time.FakeTime;
-import com.swirlds.common.crypto.CryptographyFactory;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.common.crypto.config.CryptoConfig;
 import com.swirlds.common.merkle.MerkleNode;
 import com.swirlds.common.merkle.crypto.MerkleCryptography;
 import com.swirlds.common.merkle.crypto.MerkleCryptographyFactory;
 import com.swirlds.common.metrics.noop.NoOpMetrics;
 import com.swirlds.config.api.ConfigurationBuilder;
 import com.swirlds.merkle.map.MerkleMap;
-import com.swirlds.platform.test.fixtures.state.FakeStateLifecycles;
+import com.swirlds.platform.test.fixtures.state.FakeConsensusStateEventHandler;
 import com.swirlds.platform.test.fixtures.state.MerkleTestBase;
 import com.swirlds.platform.test.fixtures.state.TestMerkleStateRoot;
 import com.swirlds.state.StateChangeListener;
@@ -51,6 +48,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.hiero.base.crypto.Hash;
+import org.hiero.base.crypto.config.CryptoConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -72,7 +71,7 @@ class MerkleStateRootTest extends MerkleTestBase {
     @BeforeEach
     void setUp() {
         setupConstructableRegistry();
-        FakeStateLifecycles.registerMerkleStateRootClassIds();
+        FakeConsensusStateEventHandler.registerMerkleStateRootClassIds();
         setupFruitMerkleMap();
         stateRoot = new TestMerkleStateRoot();
         stateRoot.init(new FakeTime(), new NoOpMetrics(), mock(MerkleCryptography.class), () -> GENESIS_ROUND);
@@ -832,11 +831,9 @@ class MerkleStateRootTest extends MerkleTestBase {
             stateRoot.putServiceStateIfAbsent(countryMetadata, () -> countrySingleton);
             stateRoot.putServiceStateIfAbsent(steamMetadata, () -> steamQueue);
 
-            merkleCryptography = MerkleCryptographyFactory.create(
-                    ConfigurationBuilder.create()
-                            .withConfigDataType(CryptoConfig.class)
-                            .build(),
-                    CryptographyFactory.create());
+            merkleCryptography = MerkleCryptographyFactory.create(ConfigurationBuilder.create()
+                    .withConfigDataType(CryptoConfig.class)
+                    .build());
             stateRoot.init(new FakeTime(), new NoOpMetrics(), merkleCryptography, () -> GENESIS_ROUND);
         }
 

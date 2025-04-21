@@ -6,6 +6,9 @@ import static java.util.Objects.requireNonNull;
 import com.hedera.node.app.hints.HintsService;
 import com.hedera.node.app.hints.WritableHintsStore;
 import com.hedera.node.app.hints.impl.WritableHintsStoreImpl;
+import com.hedera.node.app.history.HistoryService;
+import com.hedera.node.app.history.WritableHistoryStore;
+import com.hedera.node.app.history.impl.WritableHistoryStoreImpl;
 import com.hedera.node.app.ids.EntityIdService;
 import com.hedera.node.app.ids.WritableEntityIdStore;
 import com.hedera.node.app.roster.RosterService;
@@ -65,19 +68,12 @@ public class WritableStoreFactory {
         newMap.put(WritableNftStore.class, new StoreEntry(TokenService.NAME, WritableNftStore::new));
         newMap.put(WritableTokenStore.class, new StoreEntry(TokenService.NAME, WritableTokenStore::new));
         newMap.put(
-                WritableTokenRelationStore.class,
-                new StoreEntry(
-                        TokenService.NAME,
-                        (states, entityCounters) -> new WritableTokenRelationStore(states, entityCounters)));
+                WritableTokenRelationStore.class, new StoreEntry(TokenService.NAME, WritableTokenRelationStore::new));
         newMap.put(
                 WritableNetworkStakingRewardsStore.class,
                 new StoreEntry(
                         TokenService.NAME, (states, entityCounters) -> new WritableNetworkStakingRewardsStore(states)));
-        newMap.put(
-                WritableStakingInfoStore.class,
-                new StoreEntry(
-                        TokenService.NAME,
-                        (states, entityCounters) -> new WritableStakingInfoStore(states, entityCounters)));
+        newMap.put(WritableStakingInfoStore.class, new StoreEntry(TokenService.NAME, WritableStakingInfoStore::new));
         // FreezeService
         newMap.put(
                 WritableFreezeStore.class,
@@ -103,9 +99,10 @@ public class WritableStoreFactory {
                 WritableRosterStore.class,
                 new StoreEntry(RosterService.NAME, (states, entityCounters) -> new WritableRosterStore(states)));
         // HintsService
+        newMap.put(WritableHintsStore.class, new StoreEntry(HintsService.NAME, WritableHintsStoreImpl::new));
         newMap.put(
-                WritableHintsStore.class,
-                new StoreEntry(HintsService.NAME, (states, entityCounters) -> new WritableHintsStoreImpl(states)));
+                WritableHistoryStore.class,
+                new StoreEntry(HistoryService.NAME, (states, entityCounters) -> new WritableHistoryStoreImpl(states)));
         return Collections.unmodifiableMap(newMap);
     }
 
@@ -118,6 +115,7 @@ public class WritableStoreFactory {
      *
      * @param state       the {@link State} to use
      * @param serviceName the name of the service to create stores for
+     * @param entityCounters the {@link WritableEntityCounters} to use
      * @throws NullPointerException     if one of the arguments is {@code null}
      * @throws IllegalArgumentException if the service name is unknown
      */

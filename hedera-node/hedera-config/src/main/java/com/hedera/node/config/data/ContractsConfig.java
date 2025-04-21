@@ -26,6 +26,8 @@ public record ContractsConfig(
                 boolean noncesExternalizationEnabled,
         @ConfigProperty(defaultValue = "false") @NetworkProperty boolean enforceCreationThrottle,
         @ConfigProperty(defaultValue = "15000000") @NetworkProperty long maxGasPerSec,
+        @ConfigProperty(defaultValue = "15000000") @NetworkProperty long maxGasPerSecBackend,
+        @ConfigProperty(defaultValue = "1") @NetworkProperty int gasThrottleBurstSeconds,
         @ConfigProperty(value = "maxKvPairs.aggregate", defaultValue = "500000000") @NetworkProperty
                 long maxKvPairsAggregate,
         @ConfigProperty(value = "maxKvPairs.individual", defaultValue = "16384000") @NetworkProperty
@@ -87,19 +89,8 @@ public record ContractsConfig(
         @ConfigProperty(value = "systemContract.accountService.isAuthorizedEnabled", defaultValue = "true")
                 @NetworkProperty
                 boolean systemContractAccountServiceIsAuthorizedEnabled,
-        @ConfigProperty(value = "systemContract.metadataKeyAndFieldSupport.enabled", defaultValue = "false")
-                @NetworkProperty
-                boolean metadataKeyAndFieldEnabled,
         @ConfigProperty(value = "systemContract.updateCustomFees.enabled", defaultValue = "true") @NetworkProperty
                 boolean systemContractUpdateCustomFeesEnabled,
-        @ConfigProperty(value = "systemContract.tokenInfo.v2.enabled", defaultValue = "false") @NetworkProperty
-                boolean systemContractTokenInfoV2Enabled,
-        @ConfigProperty(value = "systemContract.precisionLossFixForGas.enabled", defaultValue = "true") @NetworkProperty
-                boolean isGasPrecisionLossFixEnabled,
-        @ConfigProperty(value = "systemContract.canonicalViewGas.enabled", defaultValue = "true") @NetworkProperty
-                boolean isCanonicalViewGasEnabled,
-        @ConfigProperty(value = "systemContract.updateNFTsMetadata.enabled", defaultValue = "false") @NetworkProperty
-                boolean systemContractUpdateNFTsMetadataEnabled,
         @ConfigProperty(value = "systemContract.airdropTokens.enabled", defaultValue = "true") @NetworkProperty
                 boolean systemContractAirdropTokensEnabled,
         @ConfigProperty(value = "systemContract.cancelAirdrops.enabled", defaultValue = "true") @NetworkProperty
@@ -113,7 +104,7 @@ public record ContractsConfig(
                 boolean systemContractSetUnlimitedAutoAssociationsEnabled,
         @ConfigProperty(value = "systemContract.hts.addresses", defaultValue = "359") // 359 = 0x167, 364 = 0x16C
                 Set<Long> callableHTSAddresses,
-        @ConfigProperty(value = "evm.ethTransaction.zeroHapiFees.enabled", defaultValue = "false") @NetworkProperty
+        @ConfigProperty(value = "evm.ethTransaction.zeroHapiFees.enabled", defaultValue = "true") @NetworkProperty
                 boolean evmEthTransactionZeroHapiFeesEnabled,
         @ConfigProperty(value = "evm.allowCallsToNonContractAccounts", defaultValue = "true") @NetworkProperty
                 boolean evmAllowCallsToNonContractAccounts,

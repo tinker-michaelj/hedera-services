@@ -9,6 +9,9 @@ plugins {
 testModuleInfo {
     requires("com.swirlds.base")
     requires("com.swirlds.common.test.fixtures")
+    requires("org.hiero.base.concurrent")
+    requires("org.hiero.base.crypto.test.fixtures")
+    requires("org.hiero.base.utility.test.fixtures")
     requires("org.junit.jupiter.api")
     requires("org.junit.jupiter.params")
 }
@@ -25,6 +28,8 @@ timingSensitiveModuleInfo {
     requires("com.swirlds.merkledb")
     requires("com.swirlds.metrics.api")
     requires("com.swirlds.virtualmap")
+    requires("org.hiero.base.crypto")
+    requires("org.hiero.base.utility.test.fixtures")
     requires("org.junit.jupiter.api")
     requires("org.junit.jupiter.params")
     requires("org.mockito")

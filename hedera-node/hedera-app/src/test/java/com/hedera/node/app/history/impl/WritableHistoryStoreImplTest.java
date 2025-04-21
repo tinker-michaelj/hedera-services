@@ -39,7 +39,6 @@ import com.hedera.node.app.ids.EntityIdService;
 import com.hedera.node.app.metrics.StoreMetricsServiceImpl;
 import com.hedera.node.app.roster.ActiveRosters;
 import com.hedera.node.app.spi.AppContext;
-import com.hedera.node.app.version.ServicesSoftwareVersion;
 import com.hedera.node.config.data.TssConfig;
 import com.hedera.node.config.data.VersionConfig;
 import com.hedera.node.config.testfixtures.HederaTestConfigBuilder;
@@ -97,9 +96,6 @@ class WritableHistoryStoreImplTest {
 
     @Mock
     private HistoryLibrary library;
-
-    @Mock
-    private HistoryLibraryCodec codec;
 
     @Mock
     private NetworkInfo networkInfo;
@@ -399,12 +395,7 @@ class WritableHistoryStoreImplTest {
         Set.of(
                         new EntityIdService(),
                         new HistoryServiceImpl(
-                                NO_OP_METRICS,
-                                ForkJoinPool.commonPool(),
-                                appContext,
-                                library,
-                                codec,
-                                WITH_ENABLED_HISTORY))
+                                NO_OP_METRICS, ForkJoinPool.commonPool(), appContext, library, WITH_ENABLED_HISTORY))
                 .forEach(servicesRegistry::register);
         final var migrator = new FakeServiceMigrator();
         final var bootstrapConfig = new BootstrapConfigProviderImpl().getConfiguration();
@@ -412,11 +403,9 @@ class WritableHistoryStoreImplTest {
                 state,
                 servicesRegistry,
                 null,
-                new ServicesSoftwareVersion(
-                        bootstrapConfig.getConfigData(VersionConfig.class).servicesVersion()),
+                bootstrapConfig.getConfigData(VersionConfig.class).servicesVersion(),
                 new ConfigProviderImpl().getConfiguration(),
                 DEFAULT_CONFIG,
-                networkInfo,
                 NO_OP_METRICS,
                 startupNetworks,
                 storeMetricsService,

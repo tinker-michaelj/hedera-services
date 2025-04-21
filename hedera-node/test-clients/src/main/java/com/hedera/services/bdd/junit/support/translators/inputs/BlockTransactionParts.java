@@ -2,14 +2,11 @@
 package com.hedera.services.bdd.junit.support.translators.inputs;
 
 import static com.hedera.node.app.hapi.utils.CommonUtils.noThrowSha384HashOf;
-import static java.util.Collections.emptyList;
 import static java.util.Objects.requireNonNull;
 
 import com.hedera.hapi.block.stream.output.CallContractOutput;
 import com.hedera.hapi.block.stream.output.CreateContractOutput;
 import com.hedera.hapi.block.stream.output.CreateScheduleOutput;
-import com.hedera.hapi.block.stream.output.CryptoTransferOutput;
-import com.hedera.hapi.block.stream.output.TokenAirdropOutput;
 import com.hedera.hapi.block.stream.output.TransactionOutput;
 import com.hedera.hapi.block.stream.output.TransactionResult;
 import com.hedera.hapi.node.base.AccountAmount;
@@ -23,6 +20,7 @@ import com.hedera.hapi.node.base.TransactionID;
 import com.hedera.hapi.node.base.TransferList;
 import com.hedera.hapi.node.transaction.AssessedCustomFee;
 import com.hedera.hapi.node.transaction.TransactionBody;
+import com.hedera.hapi.platform.event.TransactionGroupRole;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -35,11 +33,13 @@ import java.util.stream.Stream;
  * transactional unit with parent/child relationships.
  * @param transactionParts the parts of the transaction
  * @param transactionResult the result of processing the transaction
+ * @param role the role of the transaction in the group
  * @param transactionOutputs the output of processing the transaction
  */
 public record BlockTransactionParts(
         @NonNull TransactionParts transactionParts,
         @NonNull TransactionResult transactionResult,
+        @NonNull TransactionGroupRole role,
         @Nullable TransactionOutput... transactionOutputs) {
 
     /**
@@ -155,32 +155,40 @@ public record BlockTransactionParts(
 
     /**
      * Constructs a new {@link BlockTransactionParts} that includes an output.
+     *
      * @param transactionParts the parts of the transaction
      * @param transactionResult the result of processing the transaction
+     * @param role the role of the transaction in the group
      * @param transactionOutputs the outputs of processing the transaction
      * @return the constructed object
      */
     public static BlockTransactionParts withOutputs(
             @NonNull final TransactionParts transactionParts,
             @NonNull final TransactionResult transactionResult,
+            @NonNull final TransactionGroupRole role,
             @NonNull final TransactionOutput... transactionOutputs) {
         requireNonNull(transactionParts);
         requireNonNull(transactionResult);
         requireNonNull(transactionOutputs);
-        return new BlockTransactionParts(transactionParts, transactionResult, transactionOutputs);
+        return new BlockTransactionParts(transactionParts, transactionResult, role, transactionOutputs);
     }
 
     /**
      * Constructs a new {@link BlockTransactionParts} that does not include an output.
+     *
      * @param transactionParts the parts of the transaction
      * @param transactionResult the result of processing the transaction
+     * @param role the role of the transaction in the group
      * @return the constructed object
      */
     public static BlockTransactionParts sansOutput(
-            @NonNull final TransactionParts transactionParts, @NonNull final TransactionResult transactionResult) {
+            @NonNull final TransactionParts transactionParts,
+            @NonNull final TransactionResult transactionResult,
+            @NonNull final TransactionGroupRole role) {
         requireNonNull(transactionParts);
         requireNonNull(transactionResult);
-        return new BlockTransactionParts(transactionParts, transactionResult);
+        requireNonNull(role);
+        return new BlockTransactionParts(transactionParts, transactionResult, role);
     }
 
     /**
@@ -194,7 +202,9 @@ public record BlockTransactionParts(
      * Returns whether the transaction has an output.
      */
     public boolean hasContractOutput() {
-        return transactionOutputs != null && Stream.of(transactionOutputs).anyMatch(TransactionOutput::hasContractCall);
+        return transactionOutputs != null
+                && Stream.of(transactionOutputs)
+                        .anyMatch(com.hedera.hapi.block.stream.output.TransactionOutput::hasContractCall);
     }
 
     /**
@@ -234,18 +244,6 @@ public record BlockTransactionParts(
     }
 
     /**
-     * Returns a token airdrop output or throws if it is not present.
-     */
-    public TokenAirdropOutput tokenAirdropOutputOrThrow() {
-        requireNonNull(transactionOutputs);
-        return Stream.of(transactionOutputs)
-                .filter(TransactionOutput::hasTokenAirdrop)
-                .findAny()
-                .map(TransactionOutput::tokenAirdropOrThrow)
-                .orElseThrow();
-    }
-
-    /**
      * Returns the {@link TransactionOutput} of the given kind if it is present.
      * @param kind the kind of output
      * @return the output if present
@@ -264,9 +262,6 @@ public record BlockTransactionParts(
      * @return the assessed custom fees
      */
     public List<AssessedCustomFee> assessedCustomFees() {
-        return outputIfPresent(TransactionOutput.TransactionOneOfType.CRYPTO_TRANSFER)
-                .map(TransactionOutput::cryptoTransferOrThrow)
-                .map(CryptoTransferOutput::assessedCustomFees)
-                .orElse(emptyList());
+        return transactionResult().assessedCustomFees();
     }
 }

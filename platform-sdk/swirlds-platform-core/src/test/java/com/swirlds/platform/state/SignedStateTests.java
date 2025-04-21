@@ -2,7 +2,7 @@
 package com.swirlds.platform.state;
 
 import static com.swirlds.common.test.fixtures.AssertionUtils.assertEventuallyTrue;
-import static com.swirlds.platform.test.fixtures.state.FakeStateLifecycles.FAKE_MERKLE_STATE_LIFECYCLES;
+import static com.swirlds.platform.test.fixtures.state.FakeConsensusStateEventHandler.FAKE_CONSENSUS_STATE_EVENT_HANDLER;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -13,7 +13,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
-import com.swirlds.common.exceptions.ReferenceCountException;
 import com.swirlds.common.merkle.MerkleNode;
 import com.swirlds.common.test.fixtures.platform.TestPlatformContextBuilder;
 import com.swirlds.merkledb.MerkleDb;
@@ -30,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.hiero.base.exceptions.ReferenceCountException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -67,7 +67,7 @@ class SignedStateTests {
     private MerkleNodeState buildMockState(
             final Random random, final Runnable reserveCallback, final Runnable releaseCallback) {
         final var real = new TestMerkleStateRoot();
-        FAKE_MERKLE_STATE_LIFECYCLES.initStates(real);
+        FAKE_CONSENSUS_STATE_EVENT_HANDLER.initStates(real);
         RosterUtils.setActiveRoster(real, RandomRosterBuilder.create(random).build(), 0L);
         final MerkleNodeState state = spy(real);
         if (reserveCallback != null) {
@@ -214,7 +214,7 @@ class SignedStateTests {
         final MerkleNodeState state = spy(new TestMerkleStateRoot());
         final PlatformStateModifier platformState = mock(PlatformStateModifier.class);
         final TestPlatformStateFacade platformStateFacade = mock(TestPlatformStateFacade.class);
-        FAKE_MERKLE_STATE_LIFECYCLES.initPlatformState(state);
+        FAKE_CONSENSUS_STATE_EVENT_HANDLER.initPlatformState(state);
         when(platformState.getRound()).thenReturn(0L);
         final SignedState signedState = new SignedState(
                 TestPlatformContextBuilder.create().build().getConfiguration(),

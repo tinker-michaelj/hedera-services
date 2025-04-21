@@ -50,10 +50,12 @@ public class HapiNodeCreate extends HapiTxnOp<HapiNodeCreate> {
             Arrays.asList(endpointFor("192.168.1.200", 123), endpointFor("192.168.1.201", 123));
     private List<ServiceEndpoint> grpcEndpoints = Arrays.asList(
             ServiceEndpoint.newBuilder().setDomainName("test.com").setPort(123).build());
+    private ServiceEndpoint grpcWebProxyEndpoint = endpointFor("grpc.web.proxy.com", 123);
     private Optional<byte[]> gossipCaCertificate = Optional.empty();
     private Optional<byte[]> grpcCertificateHash = Optional.empty();
     private Optional<String> adminKeyName = Optional.empty();
     private Optional<KeyShape> adminKeyShape = Optional.empty();
+    private Optional<Boolean> declineReward = Optional.empty();
 
     @Nullable
     private LongConsumer nodeIdObserver;
@@ -110,6 +112,11 @@ public class HapiNodeCreate extends HapiTxnOp<HapiNodeCreate> {
         return this;
     }
 
+    public HapiNodeCreate grpcWebProxyEndpoint(final ServiceEndpoint grpcWebProxyEndpoint) {
+        this.grpcWebProxyEndpoint = grpcWebProxyEndpoint;
+        return this;
+    }
+
     public HapiNodeCreate gossipCaCertificate(@NonNull final Bytes cert) {
         return gossipCaCertificate(cert.toByteArray());
     }
@@ -121,6 +128,11 @@ public class HapiNodeCreate extends HapiTxnOp<HapiNodeCreate> {
 
     public HapiNodeCreate grpcCertificateHash(final byte[] grpcCertificateHash) {
         this.grpcCertificateHash = Optional.of(grpcCertificateHash);
+        return this;
+    }
+
+    public HapiNodeCreate declineReward(final boolean decline) {
+        this.declineReward = Optional.of(decline);
         return this;
     }
 
@@ -173,8 +185,10 @@ public class HapiNodeCreate extends HapiTxnOp<HapiNodeCreate> {
                             builder.setAdminKey(adminKey);
                             builder.clearGossipEndpoint().addAllGossipEndpoint(gossipEndpoints);
                             builder.clearServiceEndpoint().addAllServiceEndpoint(grpcEndpoints);
+                            builder.setGrpcProxyEndpoint(grpcWebProxyEndpoint);
                             gossipCaCertificate.ifPresent(s -> builder.setGossipCaCertificate(ByteString.copyFrom(s)));
                             grpcCertificateHash.ifPresent(s -> builder.setGrpcCertificateHash(ByteString.copyFrom(s)));
+                            declineReward.ifPresent(builder::setDeclineReward);
                         });
         return b -> b.setNodeCreate(opBody);
     }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.virtual.merkle.map;
 
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -8,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.swirlds.common.config.StateCommonConfig;
-import com.swirlds.common.crypto.DigestType;
 import com.swirlds.common.io.config.TemporaryFileConfig;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.config.api.ConfigurationBuilder;
@@ -27,6 +27,7 @@ import com.swirlds.virtualmap.datasource.VirtualDataSourceBuilder;
 import com.swirlds.virtualmap.datasource.VirtualLeafRecord;
 import com.swirlds.virtualmap.internal.RecordAccessor;
 import com.swirlds.virtualmap.internal.merkle.VirtualRootNode;
+import org.hiero.base.crypto.DigestType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Tags;
@@ -34,7 +35,7 @@ import org.junit.jupiter.api.Test;
 
 final class MapTest {
 
-    private static Configuration CONFIGURATION = ConfigurationBuilder.create()
+    private static final Configuration CONFIGURATION = ConfigurationBuilder.create()
             .withConfigDataType(VirtualMapConfig.class)
             .withConfigDataType(MerkleDbConfig.class)
             .withConfigDataType(TemporaryFileConfig.class)
@@ -114,7 +115,11 @@ final class MapTest {
                 assertNull(map.get(new TestKey(i)), "The old value should not exist anymore");
             }
         } finally {
+            // Make sure all the created virtual map copies are fully processed before this test
+            // is complete, otherwise OOME can be observed in random tests run after this one
+            final VirtualRootNode<TestKey, TestValue> root = map.getRight();
             map.release();
+            assertTrue(root.getPipeline().awaitTermination(1, MINUTES), "Pipeline termination timed out");
         }
     }
 

@@ -13,16 +13,7 @@ import com.hedera.hapi.platform.event.GossipEvent;
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
 import com.hedera.hapi.platform.state.ConsensusSnapshot;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.demo.stats.signing.algorithms.X25519SigningAlgorithm;
-import com.swirlds.platform.components.transaction.system.ScopedSystemTransaction;
-import com.swirlds.platform.consensus.EventWindow;
-import com.swirlds.platform.event.AncientMode;
-import com.swirlds.platform.event.PlatformEvent;
-import com.swirlds.platform.internal.ConsensusRound;
-import com.swirlds.platform.system.Round;
-import com.swirlds.platform.system.transaction.ConsensusTransaction;
-import com.swirlds.platform.system.transaction.TransactionWrapper;
 import java.security.SignatureException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,6 +22,15 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.hiero.consensus.model.event.AncientMode;
+import org.hiero.consensus.model.event.PlatformEvent;
+import org.hiero.consensus.model.hashgraph.ConsensusRound;
+import org.hiero.consensus.model.hashgraph.EventWindow;
+import org.hiero.consensus.model.hashgraph.Round;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.transaction.ConsensusTransaction;
+import org.hiero.consensus.model.transaction.ScopedSystemTransaction;
+import org.hiero.consensus.model.transaction.TransactionWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,7 +42,7 @@ class StatsSigningTestingToolStateTest {
     private static final int transactionSize = 100;
     private Random random;
     private StatsSigningTestingToolState state;
-    private StatsSigningTestingToolStateLifecycles stateLifecycles;
+    private StatsSigningTestingToolConsensusStateEventHandler consensusStateEventHandler;
     private StatsSigningTestingToolMain main;
     private Round round;
     private PlatformEvent event;
@@ -56,7 +56,7 @@ class StatsSigningTestingToolStateTest {
         final SttTransactionPool transactionPool = mock(SttTransactionPool.class);
         final Supplier<SttTransactionPool> transactionPoolSupplier = mock(Supplier.class);
         state = new StatsSigningTestingToolState();
-        stateLifecycles = new StatsSigningTestingToolStateLifecycles(transactionPoolSupplier);
+        consensusStateEventHandler = new StatsSigningTestingToolConsensusStateEventHandler(transactionPoolSupplier);
         main = new StatsSigningTestingToolMain();
         random = new Random();
         event = mock(PlatformEvent.class);
@@ -96,7 +96,7 @@ class StatsSigningTestingToolStateTest {
         when(consensusTransaction.getApplicationTransaction()).thenReturn(transactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isZero();
@@ -111,7 +111,7 @@ class StatsSigningTestingToolStateTest {
         when(consensusTransaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(1);
@@ -134,7 +134,7 @@ class StatsSigningTestingToolStateTest {
         when(thirdConsensusTransaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(3);
@@ -149,12 +149,16 @@ class StatsSigningTestingToolStateTest {
         final var bytes = signedTransaction ? getSignedApplicationTransaction() : getUnsignedApplicationTransaction();
 
         final var eventCore = mock(EventCore.class);
-        final var gossipEvent = new GossipEvent(eventCore, null, List.of(bytes));
+        final var gossipEvent = GossipEvent.newBuilder()
+                .eventCore(eventCore)
+                .transactions(bytes)
+                .build();
+
         when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
         event = new PlatformEvent(gossipEvent);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isZero();
@@ -167,12 +171,15 @@ class StatsSigningTestingToolStateTest {
 
         final var stateSignatureTransactionBytes = main.encodeSystemTransaction(stateSignatureTransaction);
         final var eventCore = mock(EventCore.class);
-        final var gossipEvent = new GossipEvent(eventCore, null, List.of(stateSignatureTransactionBytes));
+        final var gossipEvent = GossipEvent.newBuilder()
+                .eventCore(eventCore)
+                .transactions(stateSignatureTransactionBytes)
+                .build();
         when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
         event = new PlatformEvent(gossipEvent);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(1);
@@ -186,18 +193,16 @@ class StatsSigningTestingToolStateTest {
         final var stateSignatureTransactionBytes = main.encodeSystemTransaction(stateSignatureTransaction);
 
         final var eventCore = mock(EventCore.class);
-        final var gossipEvent = new GossipEvent(
-                eventCore,
-                null,
-                List.of(
-                        stateSignatureTransactionBytes,
-                        stateSignatureTransactionBytes,
-                        stateSignatureTransactionBytes));
+        final var gossipEvent = GossipEvent.newBuilder()
+                .eventCore(eventCore)
+                .transactions(List.of(
+                        stateSignatureTransactionBytes, stateSignatureTransactionBytes, stateSignatureTransactionBytes))
+                .build();
         when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
         event = new PlatformEvent(gossipEvent);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(3);
@@ -211,12 +216,15 @@ class StatsSigningTestingToolStateTest {
         final var stateSignatureTransactionBytes =
                 StateSignatureTransaction.PROTOBUF.toBytes(stateSignatureTransaction);
         final var eventCore = mock(EventCore.class);
-        final var gossipEvent = new GossipEvent(eventCore, null, List.of(stateSignatureTransactionBytes));
+        final var gossipEvent = GossipEvent.newBuilder()
+                .eventCore(eventCore)
+                .transactions(stateSignatureTransactionBytes)
+                .build();
         when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
         event = new PlatformEvent(gossipEvent);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isZero();
@@ -227,7 +235,7 @@ class StatsSigningTestingToolStateTest {
         // Given (empty)
 
         // When
-        final boolean result = stateLifecycles.onSealConsensusRound(round, state);
+        final boolean result = consensusStateEventHandler.onSealConsensusRound(round, state);
 
         // Then
         assertThat(result).isTrue();

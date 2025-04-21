@@ -3,34 +3,34 @@ package com.swirlds.platform;
 
 import static com.swirlds.logging.legacy.LogMarker.RECONNECT;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.node.state.roster.Roster;
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.crypto.Hash;
 import com.swirlds.common.stream.RunningEventHashOverride;
 import com.swirlds.logging.legacy.LogMarker;
 import com.swirlds.platform.components.AppNotifier;
 import com.swirlds.platform.components.SavedStateController;
-import com.swirlds.platform.consensus.EventWindow;
-import com.swirlds.platform.event.AncientMode;
 import com.swirlds.platform.event.validation.RosterUpdate;
-import com.swirlds.platform.eventhandling.EventConfig;
 import com.swirlds.platform.listeners.ReconnectCompleteNotification;
 import com.swirlds.platform.roster.RosterRetriever;
+import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.state.MerkleNodeState;
-import com.swirlds.platform.state.StateLifecycles;
 import com.swirlds.platform.state.SwirldStateManager;
 import com.swirlds.platform.state.nexus.SignedStateNexus;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.SignedState;
 import com.swirlds.platform.system.InitTrigger;
 import com.swirlds.platform.system.Platform;
-import com.swirlds.platform.system.SoftwareVersion;
 import com.swirlds.platform.system.status.actions.ReconnectCompleteAction;
 import com.swirlds.platform.wiring.PlatformWiring;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.util.Objects;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.crypto.Hash;
+import org.hiero.consensus.config.EventConfig;
+import org.hiero.consensus.model.event.AncientMode;
+import org.hiero.consensus.model.hashgraph.EventWindow;
 
 // FUTURE WORK: this data should be traveling out over the wiring framework.
 
@@ -47,7 +47,7 @@ public class ReconnectStateLoader {
     private final SignedStateNexus latestImmutableStateNexus;
     private final SavedStateController savedStateController;
     private final Roster roster;
-    private final StateLifecycles stateLifecycles;
+    private final ConsensusStateEventHandler consensusStateEventHandler;
     private final PlatformStateFacade platformStateFacade;
 
     /**
@@ -60,7 +60,7 @@ public class ReconnectStateLoader {
      * @param latestImmutableStateNexus holds the latest immutable state
      * @param savedStateController      manages how states are saved
      * @param roster                    the current roster
-     * @param stateLifecycles           state lifecycle event handler
+     * @param consensusStateEventHandler           state lifecycle event handler
      */
     public ReconnectStateLoader(
             @NonNull final Platform platform,
@@ -70,7 +70,7 @@ public class ReconnectStateLoader {
             @NonNull final SignedStateNexus latestImmutableStateNexus,
             @NonNull final SavedStateController savedStateController,
             @NonNull final Roster roster,
-            @NonNull final StateLifecycles stateLifecycles,
+            @NonNull final ConsensusStateEventHandler consensusStateEventHandler,
             @NonNull final PlatformStateFacade platformStateFacade) {
         this.platform = Objects.requireNonNull(platform);
         this.platformContext = Objects.requireNonNull(platformContext);
@@ -79,7 +79,7 @@ public class ReconnectStateLoader {
         this.latestImmutableStateNexus = Objects.requireNonNull(latestImmutableStateNexus);
         this.savedStateController = Objects.requireNonNull(savedStateController);
         this.roster = Objects.requireNonNull(roster);
-        this.stateLifecycles = stateLifecycles;
+        this.consensusStateEventHandler = consensusStateEventHandler;
         this.platformStateFacade = platformStateFacade;
     }
 
@@ -99,9 +99,10 @@ public class ReconnectStateLoader {
             // of the state, and we want to be sure that the first state in the chain of copies has been initialized.
             final Hash reconnectHash = signedState.getState().getHash();
             final MerkleNodeState state = signedState.getState();
-            final SoftwareVersion creationSoftwareVersion = platformStateFacade.creationSoftwareVersionOf(state);
+            final SemanticVersion creationSoftwareVersion = platformStateFacade.creationSoftwareVersionOf(state);
             signedState.init(platformContext);
-            stateLifecycles.onStateInitialized(state, platform, InitTrigger.RECONNECT, creationSoftwareVersion);
+            consensusStateEventHandler.onStateInitialized(
+                    state, platform, InitTrigger.RECONNECT, creationSoftwareVersion);
 
             if (!Objects.equals(signedState.getState().getHash(), reconnectHash)) {
                 throw new IllegalStateException(
@@ -138,7 +139,7 @@ public class ReconnectStateLoader {
             platformWiring.consensusSnapshotOverride(
                     Objects.requireNonNull(platformStateFacade.consensusSnapshotOf(state)));
 
-            final Roster previousRoster = RosterRetriever.retrievePreviousRoster(state, platformStateFacade);
+            final Roster previousRoster = RosterRetriever.retrievePreviousRoster(state);
             platformWiring.getRosterUpdateInput().inject(new RosterUpdate(previousRoster, roster));
 
             final AncientMode ancientMode = platformContext

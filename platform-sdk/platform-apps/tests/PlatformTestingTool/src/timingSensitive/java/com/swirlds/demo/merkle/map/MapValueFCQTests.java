@@ -11,14 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.hedera.hapi.node.state.roster.Roster;
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.constructable.ConstructableRegistryException;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
 import com.swirlds.common.merkle.crypto.MerkleCryptography;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.common.test.fixtures.io.InputOutputStream;
+import com.swirlds.common.test.fixtures.merkle.TestMerkleCryptoFactory;
+import com.swirlds.demo.platform.PlatformTestingToolConsensusStateEventHandler;
 import com.swirlds.demo.platform.PlatformTestingToolState;
-import com.swirlds.demo.platform.PlatformTestingToolStateLifecycles;
 import com.swirlds.demo.platform.TestUtil;
 import com.swirlds.demo.platform.expiration.ExpirationUtils;
 import com.swirlds.merkle.map.MerkleMap;
@@ -31,6 +28,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Random;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.constructable.ConstructableRegistryException;
+import org.hiero.consensus.model.node.NodeId;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ public class MapValueFCQTests {
     private static final Random RANDOM = new Random();
     private static final Random random = new Random();
     static PlatformTestingToolState state;
-    static PlatformTestingToolStateLifecycles lifecycles;
+    static PlatformTestingToolConsensusStateEventHandler lifecycles;
     private static MerkleCryptography cryptography;
     private static MapValueFCQ mapValueFCQ;
     private static MapKey mapKey;
@@ -60,12 +60,14 @@ public class MapValueFCQTests {
 
     @BeforeAll
     public static void setUp() throws ConstructableRegistryException {
-        ConstructableRegistry.getInstance().registerConstructables("com.swirlds");
-        cryptography = MerkleCryptoFactory.getInstance();
+        final ConstructableRegistry registry = ConstructableRegistry.getInstance();
+        registry.registerConstructables("com.swirlds");
+        registry.registerConstructables("org.hiero.consensus");
+        cryptography = TestMerkleCryptoFactory.getInstance();
 
         mapKey = new MapKey(0, 0, random.nextLong());
         state = Mockito.spy(PlatformTestingToolState.class);
-        lifecycles = new PlatformTestingToolStateLifecycles(DEFAULT_PLATFORM_STATE_FACADE);
+        lifecycles = new PlatformTestingToolConsensusStateEventHandler(DEFAULT_PLATFORM_STATE_FACADE);
         final Platform platform = Mockito.mock(Platform.class);
         when(platform.getSelfId()).thenReturn(NodeId.of(0L));
         final Roster roster = RandomRosterBuilder.create(RANDOM).withSize(4).build();

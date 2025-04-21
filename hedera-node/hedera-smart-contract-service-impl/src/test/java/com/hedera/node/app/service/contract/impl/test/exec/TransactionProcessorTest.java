@@ -151,7 +151,7 @@ class TransactionProcessorTest {
     void lazyCreationAttemptWithNoValueFailsFast() {
         givenSenderAccountWithNoHederaAccount();
         givenRelayerAccount();
-        given(messageCallProcessor.isImplicitCreationEnabled(config)).willReturn(true);
+        given(messageCallProcessor.isImplicitCreationEnabled()).willReturn(true);
         assertAbortsWith(wellKnownRelayedHapiCall(0), INVALID_CONTRACT_ID);
     }
 
@@ -173,7 +173,7 @@ class TransactionProcessorTest {
                 null,
                 null,
                 false);
-        given(messageCallProcessor.isImplicitCreationEnabled(config)).willReturn(true);
+        given(messageCallProcessor.isImplicitCreationEnabled()).willReturn(true);
         assertAbortsWith(invalidCreation, INVALID_CONTRACT_ID);
     }
 
@@ -195,7 +195,7 @@ class TransactionProcessorTest {
                 null,
                 null,
                 false);
-        given(messageCallProcessor.isImplicitCreationEnabled(config)).willReturn(true);
+        given(messageCallProcessor.isImplicitCreationEnabled()).willReturn(true);
         final var context = wellKnownContextWith(blocks, tinybarValues, systemContractGasCalculator);
         given(gasCharging.chargeForGas(senderAccount, relayerAccount, context, worldUpdater, transaction))
                 .willReturn(CHARGING_RESULT);
@@ -246,7 +246,7 @@ class TransactionProcessorTest {
                 null,
                 null,
                 false);
-        given(messageCallProcessor.isImplicitCreationEnabled(config)).willReturn(true);
+        given(messageCallProcessor.isImplicitCreationEnabled()).willReturn(true);
         final var context = wellKnownContextWith(blocks, tinybarValues, systemContractGasCalculator);
         given(gasCharging.chargeForGas(senderAccount, relayerAccount, context, worldUpdater, transaction))
                 .willReturn(CHARGING_RESULT);
@@ -300,7 +300,7 @@ class TransactionProcessorTest {
                 null,
                 null,
                 false);
-        given(messageCallProcessor.isImplicitCreationEnabled(config)).willReturn(true);
+        given(messageCallProcessor.isImplicitCreationEnabled()).willReturn(true);
         final var context = wellKnownContextWith(blocks, tinybarValues, systemContractGasCalculator);
         given(gasCharging.chargeForGas(senderAccount, relayerAccount, context, worldUpdater, transaction))
                 .willReturn(CHARGING_RESULT);

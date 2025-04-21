@@ -16,7 +16,6 @@ import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_SEND_RECORD_THR
 import static com.hedera.hapi.node.base.ResponseCodeEnum.KEY_NOT_PROVIDED;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.KEY_REQUIRED;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.MAX_ENTITIES_IN_PRICE_REGIME_HAVE_BEEN_CREATED;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.NOT_SUPPORTED;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.PROXY_ACCOUNT_ID_FIELD_IS_DEPRECATED;
 import static com.hedera.node.app.hapi.fees.usage.SingletonUsageProperties.USAGE_PROPERTIES;
 import static com.hedera.node.app.hapi.fees.usage.crypto.CryptoOpsUsage.CREATE_SLOT_MULTIPLIER;
@@ -26,6 +25,9 @@ import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.BOOL_SIZE;
 import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.INT_SIZE;
 import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.LONG_SIZE;
 import static com.hedera.node.app.hapi.utils.fee.FeeBuilder.getAccountKeyStorageSize;
+import static com.hedera.node.app.hapi.utils.keys.KeyUtils.IMMUTABILITY_SENTINEL_KEY;
+import static com.hedera.node.app.hapi.utils.keys.KeyUtils.isEmpty;
+import static com.hedera.node.app.hapi.utils.keys.KeyUtils.isValid;
 import static com.hedera.node.app.service.token.AliasUtils.asKeyFromAlias;
 import static com.hedera.node.app.service.token.AliasUtils.asKeyFromAliasPreCheck;
 import static com.hedera.node.app.service.token.AliasUtils.extractEvmAddress;
@@ -36,9 +38,6 @@ import static com.hedera.node.app.service.token.impl.handlers.BaseTokenHandler.U
 import static com.hedera.node.app.service.token.impl.handlers.staking.StakingUtilities.NOT_REWARDED_SINCE_LAST_STAKING_META_CHANGE;
 import static com.hedera.node.app.service.token.impl.handlers.staking.StakingUtilities.NO_STAKE_PERIOD_START;
 import static com.hedera.node.app.service.token.impl.util.TokenHandlerHelper.getIfUsable;
-import static com.hedera.node.app.spi.key.KeyUtils.IMMUTABILITY_SENTINEL_KEY;
-import static com.hedera.node.app.spi.key.KeyUtils.isEmpty;
-import static com.hedera.node.app.spi.key.KeyUtils.isValid;
 import static com.hedera.node.app.spi.workflows.HandleException.validateFalse;
 import static com.hedera.node.app.spi.workflows.HandleException.validateSuccess;
 import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
@@ -76,7 +75,6 @@ import com.hedera.node.app.spi.workflows.PureChecksContext;
 import com.hedera.node.app.spi.workflows.TransactionHandler;
 import com.hedera.node.app.spi.workflows.record.StreamBuilder;
 import com.hedera.node.config.data.AccountsConfig;
-import com.hedera.node.config.data.CryptoCreateWithAliasConfig;
 import com.hedera.node.config.data.EntitiesConfig;
 import com.hedera.node.config.data.HederaConfig;
 import com.hedera.node.config.data.LedgerConfig;
@@ -84,6 +82,8 @@ import com.hedera.node.config.data.StakingConfig;
 import com.hedera.node.config.data.TokensConfig;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import edu.umd.cs.findbugs.annotations.Nullable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -100,14 +100,20 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
 
     private final CryptoCreateValidator cryptoCreateValidator;
 
+    @Nullable
+    private final AtomicBoolean systemEntitiesCreatedFlag;
+
     /**
      * Constructs a {@link CryptoCreateHandler} with the given {@link CryptoCreateValidator} and {@link StakingValidator}.
      * @param cryptoCreateValidator the validator for the crypto create transaction
      */
     @Inject
-    public CryptoCreateHandler(@NonNull final CryptoCreateValidator cryptoCreateValidator) {
+    public CryptoCreateHandler(
+            @NonNull final CryptoCreateValidator cryptoCreateValidator,
+            @Nullable final AtomicBoolean systemEntitiesCreatedFlag) {
         this.cryptoCreateValidator =
                 requireNonNull(cryptoCreateValidator, "The supplied argument 'cryptoCreateValidator' must not be null");
+        this.systemEntitiesCreatedFlag = systemEntitiesCreatedFlag;
     }
 
     @Override
@@ -119,10 +125,10 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
         validateTruePreCheck(op.hasAutoRenewPeriod(), INVALID_RENEWAL_PERIOD);
         validateTruePreCheck(op.autoRenewPeriodOrThrow().seconds() >= 0, INVALID_RENEWAL_PERIOD);
         if (op.hasShardID()) {
-            validateTruePreCheck(op.shardIDOrThrow().shardNum() == 0, INVALID_ACCOUNT_ID);
+            validateTruePreCheck(op.shardIDOrThrow().shardNum() >= 0, INVALID_ACCOUNT_ID);
         }
         if (op.hasRealmID()) {
-            validateTruePreCheck(op.realmIDOrThrow().realmNum() == 0, INVALID_ACCOUNT_ID);
+            validateTruePreCheck(op.realmIDOrThrow().realmNum() >= 0, INVALID_ACCOUNT_ID);
         }
         // HIP 904 now allows for unlimited auto-associations
         validateTruePreCheck(
@@ -144,7 +150,8 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
         // transactionID is null. This code is very particular about which error code to throw in various cases.
         // FUTURE: Clean up the error codes to be consistent.
         final var key = op.key();
-        final var isInternal = !txn.hasTransactionID();
+        final var isInternal =
+                !txn.hasTransactionID() || (systemEntitiesCreatedFlag != null && !systemEntitiesCreatedFlag.get());
         final var keyIsEmpty = isEmpty(key);
         if (!isInternal && keyIsEmpty) {
             if (key == null) {
@@ -234,13 +241,16 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
 
         // FUTURE: Use the config and check if accounts can be created. Currently, this check is being done in
         // `finishCryptoCreate` before `commit`
+        final boolean stillCreatingSystemEntities =
+                systemEntitiesCreatedFlag != null && !systemEntitiesCreatedFlag.get();
 
         // Validate fields in the transaction body that involves checking with dynamic properties or state
-        validateSemantics(context, accountStore, op);
+        validateSemantics(context, accountStore, op, stillCreatingSystemEntities);
 
         // Now that we have fully validated the transaction inputs, it is time to create an account!
-        // First, charge the payer for whatever initial balance there is.
-        if (op.initialBalance() > 0) {
+        // First, charge the payer for whatever initial balance there is, unless this dispatch is specifically
+        // to create system entities at genesis.
+        if (op.initialBalance() > 0 && !stillCreatingSystemEntities) {
             final var payer =
                     getIfUsable(context.payer(), accountStore, context.expiryValidator(), INVALID_PAYER_ACCOUNT_ID);
             final long newPayerBalance = payer.tinybarBalance() - op.initialBalance();
@@ -306,22 +316,32 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
     /**
      * Validate the fields in the transaction body that involves checking with dynamic
      * properties or state. This check is done as part of the handle workflow.
+     *
      * @param context handle context
      * @param accountStore account store
      * @param op crypto create transaction body
+     * @param stillCreatingSystemEntities whether system entities are still being created
      */
     private void validateSemantics(
             @NonNull final HandleContext context,
             @NonNull final ReadableAccountStore accountStore,
-            @NonNull final CryptoCreateTransactionBody op) {
-        final var cryptoCreateWithAliasConfig =
-                context.configuration().getConfigData(CryptoCreateWithAliasConfig.class);
+            @NonNull final CryptoCreateTransactionBody op,
+            final boolean stillCreatingSystemEntities) {
         final var ledgerConfig = context.configuration().getConfigData(LedgerConfig.class);
         final var entitiesConfig = context.configuration().getConfigData(EntitiesConfig.class);
         final var tokensConfig = context.configuration().getConfigData(TokensConfig.class);
         final var accountConfig = context.configuration().getConfigData(AccountsConfig.class);
         final var hederaConfig = context.configuration().getConfigData(HederaConfig.class);
         final var alias = op.alias();
+
+        // Don't allow creation of accounts that don't match the configured shard and realm
+        if (op.hasShardID()) {
+            validateTrue(op.shardIDOrThrow().shardNum() == hederaConfig.shard(), INVALID_ACCOUNT_ID);
+        }
+        if (op.hasRealmID()) {
+            validateTrue(op.realmIDOrThrow().realmNum() == hederaConfig.realm(), INVALID_ACCOUNT_ID);
+        }
+
         // You can never set the alias to be an "entity num alias" (sometimes called "long-zero").
         validateFalse(isEntityNumAlias(alias, hederaConfig.shard(), hederaConfig.realm()), INVALID_ALIAS_KEY);
 
@@ -331,20 +351,16 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
             throw new HandleException(MAX_ENTITIES_IN_PRICE_REGIME_HAVE_BEEN_CREATED);
         }
 
-        // Aliases are fully supported in mainnet, but we still have this feature flag. If it is disabled, then
-        // you cannot create an account with an alias. FUTURE: We may be able to remove this flag.
-        final var hasAlias = alias.length() > 0;
-        if (hasAlias && !cryptoCreateWithAliasConfig.enabled()) {
-            throw new HandleException(NOT_SUPPORTED);
-        }
-
         // We have to check the memo, which may be too long or in some other way be invalid.
         context.attributeValidator().validateMemo(op.memo());
 
+        // Aliases are fully supported in mainnet.
+        final var hasAlias = alias.length() > 0;
         // If there is an alias, then we need to make sure no other account or contract account is using that alias.
         if (hasAlias) {
+            final var config = context.configuration().getConfigData(HederaConfig.class);
             // find account by alias and check if it was deleted
-            var accountId = accountStore.getAccountIDByAlias(alias);
+            var accountId = accountStore.getAccountIDByAlias(config.shard(), config.realm(), alias);
             var account = accountId != null ? accountStore.getAccountById(accountId) : null;
             var isDeleted = account == null || account.deleted();
             validateTrue(accountId == null || isDeleted, ALIAS_ALREADY_ASSIGNED);
@@ -372,7 +388,8 @@ public class CryptoCreateHandler extends BaseCryptoHandler implements Transactio
         cryptoCreateValidator.validateKey(
                 op.keyOrThrow(), // cannot be null by this point
                 context.attributeValidator(),
-                context.savepointStack().getBaseBuilder(StreamBuilder.class).isInternalDispatch());
+                context.savepointStack().getBaseBuilder(StreamBuilder.class).isInternalDispatch()
+                        || stillCreatingSystemEntities);
 
         // Validate the staking information included in this account creation.
         if (op.hasStakedAccountId() || op.hasStakedNodeId()) {

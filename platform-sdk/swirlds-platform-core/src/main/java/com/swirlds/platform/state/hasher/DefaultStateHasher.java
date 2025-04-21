@@ -4,8 +4,9 @@ package com.swirlds.platform.state.hasher;
 import static com.swirlds.logging.legacy.LogMarker.EXCEPTION;
 
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
-import com.swirlds.platform.wiring.components.StateAndRound;
+import com.swirlds.common.merkle.crypto.MerkleCryptography;
+import com.swirlds.platform.eventhandling.StateWithHashComplexity;
+import com.swirlds.platform.state.signed.ReservedSignedState;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.time.Duration;
@@ -20,6 +21,7 @@ import org.apache.logging.log4j.Logger;
 public class DefaultStateHasher implements StateHasher {
 
     private static final Logger logger = LogManager.getLogger(DefaultStateHasher.class);
+    private final MerkleCryptography merkleCryptography;
     private final StateHasherMetrics metrics;
 
     /**
@@ -30,7 +32,7 @@ public class DefaultStateHasher implements StateHasher {
      * @param platformContext the platform context
      */
     public DefaultStateHasher(@NonNull final PlatformContext platformContext) {
-
+        merkleCryptography = platformContext.getMerkleCryptography();
         metrics = new StateHasherMetrics(platformContext.getMetrics());
     }
 
@@ -39,17 +41,16 @@ public class DefaultStateHasher implements StateHasher {
      */
     @Override
     @Nullable
-    public StateAndRound hashState(@NonNull final StateAndRound stateAndRound) {
+    public ReservedSignedState hashState(@NonNull final StateWithHashComplexity stateWithHashComplexity) {
+        final ReservedSignedState reservedSignedState = stateWithHashComplexity.reservedSignedState();
         final Instant start = Instant.now();
         try {
-            MerkleCryptoFactory.getInstance()
-                    .digestTreeAsync(
-                            stateAndRound.reservedSignedState().get().getState().getRoot())
+            merkleCryptography
+                    .digestTreeAsync(reservedSignedState.get().getState().getRoot())
                     .get();
-
             metrics.reportHashingTime(Duration.between(start, Instant.now()));
 
-            return stateAndRound;
+            return reservedSignedState;
         } catch (final ExecutionException e) {
             logger.fatal(EXCEPTION.getMarker(), "Exception occurred during SignedState hashing", e);
         } catch (final InterruptedException e) {

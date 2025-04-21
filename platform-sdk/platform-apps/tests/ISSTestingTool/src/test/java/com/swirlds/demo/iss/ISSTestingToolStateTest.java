@@ -7,18 +7,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.hedera.hapi.node.base.Timestamp;
-import com.hedera.hapi.platform.event.EventCore;
-import com.hedera.hapi.platform.event.GossipEvent;
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
-import com.swirlds.platform.components.transaction.system.ScopedSystemTransaction;
-import com.swirlds.platform.event.PlatformEvent;
-import com.swirlds.platform.system.Round;
-import com.swirlds.platform.system.events.ConsensusEvent;
-import com.swirlds.platform.system.transaction.ConsensusTransaction;
-import com.swirlds.platform.system.transaction.Transaction;
-import com.swirlds.platform.system.transaction.TransactionWrapper;
+import com.swirlds.common.test.fixtures.Randotron;
+import com.swirlds.platform.test.fixtures.event.TestingEventBuilder;
 import com.swirlds.state.merkle.singleton.StringLeaf;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -26,27 +18,33 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
+import org.hiero.consensus.model.event.ConsensusEvent;
+import org.hiero.consensus.model.event.PlatformEvent;
+import org.hiero.consensus.model.hashgraph.Round;
+import org.hiero.consensus.model.transaction.ConsensusTransaction;
+import org.hiero.consensus.model.transaction.ScopedSystemTransaction;
+import org.hiero.consensus.model.transaction.Transaction;
+import org.hiero.consensus.model.transaction.TransactionWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class ISSTestingToolStateTest {
 
     private static final int RUNNING_SUM_INDEX = 3;
-    private ISSTestingToolMain main;
     private ISSTestingToolState state;
-    private ISSTestingToolStateLifecycles stateLifecycles;
+    private ISSTestingToolConsensusStateEventHandler consensusStateEventHandler;
     private Round round;
     private ConsensusEvent event;
     private List<ScopedSystemTransaction<StateSignatureTransaction>> consumedTransactions;
     private Consumer<ScopedSystemTransaction<StateSignatureTransaction>> consumer;
     private Transaction transaction;
     private StateSignatureTransaction stateSignatureTransaction;
+    private Bytes signatureTransactionBytes;
 
     @BeforeEach
     void setUp() {
         state = new ISSTestingToolState();
-        stateLifecycles = new ISSTestingToolStateLifecycles();
-        main = mock(ISSTestingToolMain.class);
+        consensusStateEventHandler = new ISSTestingToolConsensusStateEventHandler();
         final var random = new Random();
         round = mock(Round.class);
         event = mock(ConsensusEvent.class);
@@ -64,6 +62,7 @@ class ISSTestingToolStateTest {
                 .hash(Bytes.wrap(hash))
                 .round(round.getRoundNum())
                 .build();
+        signatureTransactionBytes = StateSignatureTransaction.PROTOBUF.toBytes(stateSignatureTransaction);
     }
 
     @Test
@@ -75,7 +74,7 @@ class ISSTestingToolStateTest {
         when(transaction.getApplicationTransaction()).thenReturn(bytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         verify(round, times(1)).iterator();
@@ -94,11 +93,10 @@ class ISSTestingToolStateTest {
 
         final var stateSignatureTransactionBytes =
                 StateSignatureTransaction.PROTOBUF.toBytes(stateSignatureTransaction);
-        when(main.encodeSystemTransaction(stateSignatureTransaction)).thenReturn(stateSignatureTransactionBytes);
         when(transaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         verify(round, times(1)).iterator();
@@ -125,13 +123,12 @@ class ISSTestingToolStateTest {
 
         final var stateSignatureTransactionBytes =
                 StateSignatureTransaction.PROTOBUF.toBytes(stateSignatureTransaction);
-        when(main.encodeSystemTransaction(stateSignatureTransaction)).thenReturn(stateSignatureTransactionBytes);
         when(transaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
         when(secondConsensusTransaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
         when(thirdConsensusTransaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         verify(round, times(1)).iterator();
@@ -150,12 +147,10 @@ class ISSTestingToolStateTest {
         final var emptyStateSignatureTransaction = StateSignatureTransaction.DEFAULT;
         final var emptyStateSignatureTransactionBytes =
                 StateSignatureTransaction.PROTOBUF.toBytes(emptyStateSignatureTransaction);
-        when(main.encodeSystemTransaction(emptyStateSignatureTransaction))
-                .thenReturn(emptyStateSignatureTransactionBytes);
         when(transaction.getApplicationTransaction()).thenReturn(emptyStateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         verify(round, times(1)).iterator();
@@ -175,12 +170,10 @@ class ISSTestingToolStateTest {
         final var emptyStateSignatureTransaction = StateSignatureTransaction.DEFAULT;
         final var emptyStateSignatureTransactionBytes =
                 StateSignatureTransaction.PROTOBUF.toBytes(emptyStateSignatureTransaction);
-        when(main.encodeSystemTransaction(null))
-                .thenReturn(StateSignatureTransaction.PROTOBUF.toBytes(emptyStateSignatureTransaction));
         when(transaction.getApplicationTransaction()).thenReturn(emptyStateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         verify(round, times(1)).iterator();
@@ -195,32 +188,11 @@ class ISSTestingToolStateTest {
     @Test
     void preHandleEventWithMultipleSystemTransaction() {
         // Given
-        final var gossipEvent = mock(GossipEvent.class);
-        final var eventCore = mock(EventCore.class);
-        when(gossipEvent.eventCore()).thenReturn(eventCore);
-        when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
-        when(eventCore.creatorNodeId()).thenReturn(1L);
-        when(eventCore.parents()).thenReturn(Collections.emptyList());
-        final var consensusTransaction = mock(TransactionWrapper.class);
-        final var secondConsensusTransaction = mock(TransactionWrapper.class);
-        final var thirdConsensusTransaction = mock(TransactionWrapper.class);
-
-        final var stateSignatureTransactionBytes =
-                StateSignatureTransaction.PROTOBUF.toBytes(stateSignatureTransaction);
-        final var transactionProto = com.hedera.hapi.node.base.Transaction.newBuilder()
-                .bodyBytes(stateSignatureTransactionBytes)
+        final PlatformEvent event = new TestingEventBuilder(Randotron.create())
+                .setTransactionBytes(Collections.nCopies(3, signatureTransactionBytes))
                 .build();
-        final var transactionBytes = com.hedera.hapi.node.base.Transaction.PROTOBUF.toBytes(transactionProto);
-
-        when(consensusTransaction.getApplicationTransaction()).thenReturn(transactionBytes);
-        when(secondConsensusTransaction.getApplicationTransaction()).thenReturn(transactionBytes);
-        when(thirdConsensusTransaction.getApplicationTransaction()).thenReturn(transactionBytes);
-        when(gossipEvent.transactions()).thenReturn(List.of(transactionBytes, transactionBytes, transactionBytes));
-        event = new PlatformEvent(gossipEvent);
-        when(round.iterator()).thenReturn(Collections.singletonList(event).iterator());
-
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedTransactions).hasSize(3);
@@ -229,30 +201,12 @@ class ISSTestingToolStateTest {
     @Test
     void preHandleEventWithSystemTransaction() {
         // Given
-        final var gossipEvent = mock(GossipEvent.class);
-        final var eventCore = mock(EventCore.class);
-        when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
-        when(eventCore.creatorNodeId()).thenReturn(1L);
-        when(eventCore.parents()).thenReturn(Collections.emptyList());
-        final var consensusTransaction = mock(TransactionWrapper.class);
-        when(gossipEvent.eventCore()).thenReturn(eventCore);
-
-        final var stateSignatureTransactionBytes =
-                StateSignatureTransaction.PROTOBUF.toBytes(stateSignatureTransaction);
-        final var transactionProto = com.hedera.hapi.node.base.Transaction.newBuilder()
-                .bodyBytes(stateSignatureTransactionBytes)
+        final PlatformEvent event = new TestingEventBuilder(Randotron.create())
+                .setTransactionBytes(List.of(signatureTransactionBytes))
                 .build();
-        final var transactionBytes = com.hedera.hapi.node.base.Transaction.PROTOBUF.toBytes(transactionProto);
-        when(consensusTransaction.getApplicationTransaction()).thenReturn(transactionBytes);
-        when(gossipEvent.transactions()).thenReturn(List.of(transactionBytes));
-
-        event = new PlatformEvent(gossipEvent);
-
-        when(round.iterator()).thenReturn(Collections.singletonList(event).iterator());
-        when(transaction.getApplicationTransaction()).thenReturn(transactionBytes);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedTransactions).hasSize(1);
@@ -261,28 +215,13 @@ class ISSTestingToolStateTest {
     @Test
     void preHandleEventWithEmptyTransaction() {
         // Given
-        final var gossipEvent = mock(GossipEvent.class);
-        final var eventCore = mock(EventCore.class);
-        when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
-        when(eventCore.creatorNodeId()).thenReturn(1L);
-        when(eventCore.parents()).thenReturn(Collections.emptyList());
-        final var consensusTransaction = mock(TransactionWrapper.class);
-        when(gossipEvent.eventCore()).thenReturn(eventCore);
-
-        final var stateSignatureTransactionBytes =
-                StateSignatureTransaction.PROTOBUF.toBytes(StateSignatureTransaction.DEFAULT);
-        final var transactionProto = com.hedera.hapi.node.base.Transaction.newBuilder()
-                .bodyBytes(stateSignatureTransactionBytes)
+        final PlatformEvent event = new TestingEventBuilder(Randotron.create())
+                .setAppTransactionCount(0)
+                .setSystemTransactionCount(0)
                 .build();
-        final var transactionBytes = com.hedera.hapi.node.base.Transaction.PROTOBUF.toBytes(transactionProto);
-        when(consensusTransaction.getApplicationTransaction()).thenReturn(transactionBytes);
-
-        event = new PlatformEvent(gossipEvent);
-        when(round.iterator()).thenReturn(Collections.singletonList(event).iterator());
-        when(transaction.getApplicationTransaction()).thenReturn(transactionBytes);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedTransactions).isEmpty();
@@ -293,7 +232,7 @@ class ISSTestingToolStateTest {
         // Given (empty)
 
         // When
-        final boolean result = stateLifecycles.onSealConsensusRound(round, state);
+        final boolean result = consensusStateEventHandler.onSealConsensusRound(round, state);
 
         // Then
         assertThat(result).isTrue();

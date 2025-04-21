@@ -52,6 +52,7 @@ jobs:
       enable-unit-tests: ${{ github.event_name == 'push' || github.event.inputs.enable-unit-tests == 'true' }}
       enable-hapi-tests-misc: ${{ github.event.inputs.enable-hapi-tests == 'true' }}
       enable-hapi-tests-crypto: ${{ github.event.inputs.enable-hapi-tests == 'true' }}
+      enable-hapi-tests-iss: ${{ github.event.inputs.enable-hapi-tests == 'true' }}
       enable-hapi-tests-token: ${{ github.event.inputs.enable-hapi-tests == 'true' }}
       enable-hapi-tests-smart-contract: ${{ github.event.inputs.enable-hapi-tests == 'true' }}
       enable-hapi-tests-time-consuming: ${{ github.event.inputs.enable-hapi-tests == 'true' }}
@@ -75,12 +76,12 @@ jobs:
     if: ${{ needs.code.result == 'success' }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
         with:
           egress-policy: audit
 
       - name: Trigger ZXF Deploy Production Release
-        uses: step-security/workflow-dispatch@4d1049025980f72b1327cbfdeecb07fe7a20f577 # v1.2.4
+        uses: step-security/workflow-dispatch@05938d638f4ddc45d2c59dfd122d3ba247fb7015 # v1.2.6
         with:
           workflow: .github/workflows/node-flow-deploy-release-artifact.yaml
           repo: hiero-ledger/hiero-consensus-node # ensure we are executing in the hiero-ledger org

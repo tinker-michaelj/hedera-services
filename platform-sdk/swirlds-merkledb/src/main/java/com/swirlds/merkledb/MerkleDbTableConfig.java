@@ -10,15 +10,15 @@ import com.hedera.pbj.runtime.ProtoConstants;
 import com.hedera.pbj.runtime.ProtoWriterTools;
 import com.hedera.pbj.runtime.io.ReadableSequentialData;
 import com.hedera.pbj.runtime.io.WritableSequentialData;
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.crypto.DigestType;
-import com.swirlds.common.io.SelfSerializable;
-import com.swirlds.common.io.streams.SerializableDataInputStream;
-import com.swirlds.common.io.streams.SerializableDataOutputStream;
 import com.swirlds.virtualmap.serialize.KeySerializer;
 import com.swirlds.virtualmap.serialize.ValueSerializer;
 import java.io.IOException;
 import java.util.Objects;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.crypto.DigestType;
+import org.hiero.base.io.SelfSerializable;
+import org.hiero.base.io.streams.SerializableDataInputStream;
+import org.hiero.base.io.streams.SerializableDataOutputStream;
 
 /**
  * Virtual database table configuration. It describes how to store virtual keys and values
@@ -35,6 +35,7 @@ public final class MerkleDbTableConfig implements SelfSerializable {
 
     private static final FieldDefinition FIELD_TABLECONFIG_HASHVERSION =
             new FieldDefinition("hashVersion", FieldType.UINT32, false, true, false, 1);
+
     private static final FieldDefinition FIELD_TABLECONFIG_DIGESTTYPEID =
             new FieldDefinition("digestTypeId", FieldType.UINT32, false, false, false, 2);
 
@@ -60,6 +61,7 @@ public final class MerkleDbTableConfig implements SelfSerializable {
 
     private static final FieldDefinition FIELD_TABLECONFIG_MAXNUMBEROFKEYS =
             new FieldDefinition("maxNumberOfKeys", FieldType.UINT64, false, true, false, 8);
+
     private static final FieldDefinition FIELD_TABLECONFIG_HASHRAMTODISKTHRESHOLD =
             new FieldDefinition("hashesRamToDiskThreshold", FieldType.UINT64, false, true, false, 9);
 
@@ -80,7 +82,7 @@ public final class MerkleDbTableConfig implements SelfSerializable {
      * typed objects. Previously, key and value serializers were the part of MerkleDbTableConfig.
      * The config objects were stored in MerkleDb metadata. Now these serializers are moved to the
      * VirtualMap level, but in the existing state snapshots they are still a part of MerkleDb.
-     * This is why the serializers are still read in {@link #deserialize(SerializableDataInputStream, int)}
+     * This is why the serializers are still read in {@link SelfSerializable#deserialize(SerializableDataInputStream, int)}
      * and later queried by VirtualMap / VirtualRootNode. When this object is serialized again, the
      * serializers are ignored, assuming they are saved at the VirtualMap level.
      */
@@ -94,7 +96,7 @@ public final class MerkleDbTableConfig implements SelfSerializable {
      * typed objects. Previously, key and value serializers were the part of MerkleDbTableConfig.
      * The config objects were stored in MerkleDb metadata. Now these serializers are moved to the
      * VirtualMap level, but in the existing state snapshots they are still a part of MerkleDb.
-     * This is why the serializers are still read in {@link #deserialize(SerializableDataInputStream, int)}
+     * This is why the serializers are still read in {@link SelfSerializable#deserialize(SerializableDataInputStream, int)}
      * and later queried by VirtualMap / VirtualRootNode. When this object is serialized again, the
      * serializers are ignored, assuming they are saved at the VirtualMap level.
      */
@@ -295,22 +297,6 @@ public final class MerkleDbTableConfig implements SelfSerializable {
     }
 
     /**
-     * Specifies the max number of keys that can be stored in the table. Must be greater than zero.
-     *
-     * @param maxNumberOfKeys
-     *      Max number of keys
-     * @return
-     *      This table config object
-     */
-    public MerkleDbTableConfig maxNumberOfKeys(final long maxNumberOfKeys) {
-        if (maxNumberOfKeys <= 0) {
-            throw new IllegalArgumentException("Max number of keys must be greater than 0");
-        }
-        this.maxNumberOfKeys = maxNumberOfKeys;
-        return this;
-    }
-
-    /**
      * Internal hashes RAM/disk threshold. Value {@code 0} means all hashes are to be stored on disk.
      * Value {@link Integer#MAX_VALUE} indicates that all hashes are to be stored in memory.
      *
@@ -319,22 +305,6 @@ public final class MerkleDbTableConfig implements SelfSerializable {
      */
     public long getHashesRamToDiskThreshold() {
         return hashesRamToDiskThreshold;
-    }
-
-    /**
-     * Specifies internal hashes RAM/disk threshold. Must be greater or equal to zero.
-     *
-     * @param hashesRamToDiskThreshold
-     *      Internal hashes RAM/disk threshold
-     * @return
-     *      This table config object
-     */
-    public MerkleDbTableConfig hashesRamToDiskThreshold(final long hashesRamToDiskThreshold) {
-        if (hashesRamToDiskThreshold < 0) {
-            throw new IllegalArgumentException("Hashes RAM/disk threshold must be greater or equal to 0");
-        }
-        this.hashesRamToDiskThreshold = hashesRamToDiskThreshold;
-        return this;
     }
 
     /**
