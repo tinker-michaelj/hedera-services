@@ -190,7 +190,9 @@ public class SystemSetup {
             4589190L,
             Key.newBuilder().ed25519(Bytes.fromHex(A4589190_PUBLIC_KEY)).build(),
             4589192L,
-            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build(),
+            1234567L,
+            MASTER_KEY);
     private static final int NUM_TOKENS = 10;
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
