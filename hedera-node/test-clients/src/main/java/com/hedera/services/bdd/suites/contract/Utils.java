@@ -72,7 +72,6 @@ import org.json.JSONTokener;
 
 public class Utils {
     public static final String INITCODE_EXTENSION = ".bin";
-    public static final String BYTECODE_EXTENSION = ".bbin";
     public static final String CONTRACT_RESOURCE_PATH = "src/main/resources/contract/%1$s/%2$s/%2$s%3$s";
     public static final String DEFAULT_LAMBDAS_ROOT = "lambdas";
     public static final String DEFAULT_CONTRACTS_ROOT = "contracts";
@@ -162,24 +161,6 @@ public class Utils {
      */
     public static com.hedera.pbj.runtime.io.buffer.Bytes lambdaInitcodeFromResources(@NonNull final String lambda) {
         final var path = getResourcePath(DEFAULT_LAMBDAS_ROOT, lambda, INITCODE_EXTENSION);
-        try {
-            return com.hedera.pbj.runtime.io.buffer.Bytes.wrap(
-                    Files.readAllBytes(relocatedIfNotPresentInWorkingDir(Path.of(path))));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    /**
-     * Returns the pre-initialized bytecode of the lambda with the given name from the classpath resource.
-     *
-     * @param lambda the name of the lambda
-     * @return the bytecode of the lambda
-     * @throws IllegalArgumentException if the lambda is not found
-     * @throws UncheckedIOException if an I/O error occurs
-     */
-    public static com.hedera.pbj.runtime.io.buffer.Bytes lambdaBytecodeFromResources(@NonNull final String lambda) {
-        final var path = getResourcePath(DEFAULT_LAMBDAS_ROOT, lambda, BYTECODE_EXTENSION);
         try {
             return com.hedera.pbj.runtime.io.buffer.Bytes.wrap(
                     Files.readAllBytes(relocatedIfNotPresentInWorkingDir(Path.of(path))));

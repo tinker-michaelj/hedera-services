@@ -91,7 +91,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
     private boolean setEvmAddressAliasFromKey = false;
     private Optional<ShardID> shardId = Optional.empty();
     private Optional<RealmID> realmId = Optional.empty();
-    private final List<HookInstaller> lambdaInstallers = new ArrayList<>();
+    private final List<HookInstaller> hookInstallers = new ArrayList<>();
 
     @Override
     public HederaFunctionality type() {
@@ -135,7 +135,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
 
     public HapiCryptoCreate installing(@NonNull final HookInstaller installer) {
         Objects.requireNonNull(installer);
-        lambdaInstallers.add(installer);
+        hookInstallers.add(installer);
         return this;
     }
 
@@ -322,9 +322,9 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
                                 b.setStakedNodeId(stakedNodeId.get());
                             }
                             b.setDeclineReward(isDeclinedReward);
-                            lambdaInstallers.forEach(installer -> {
+                            hookInstallers.forEach(installer -> {
                                 allRunFor(spec, installer.specSetupOp());
-                                b.addHookInstalls(CommonPbjConverters.fromPbj(installer.op()));
+                                b.addHookInstalls(CommonPbjConverters.fromPbj(installer.getInstallation()));
                             });
                         });
         return b -> b.setCryptoCreateAccount(opBody);
