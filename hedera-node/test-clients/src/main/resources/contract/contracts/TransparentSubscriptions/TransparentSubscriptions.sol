@@ -29,6 +29,7 @@ interface ICallScheduler {
         address payer,
         address contractAddr,
         uint64  expiry,
+        uint256 gasLimit,
         bytes calldata data
     ) external payable returns (bool success);
 }
@@ -41,7 +42,8 @@ contract TransparentSubscriptions {
         ICallScheduler(0x000000000000000000000000000000000000016D);
 
     uint256 public constant MAX_SETTLEMENTS_PER_TICK = 50;
-    uint64  public constant TICK_INTERVAL_SECONDS     = 60;
+    uint256 public constant GAS_LIMIT                = 500000;
+    uint64  public constant TICK_INTERVAL_SECONDS    = 1;
 
     /*──────────────────────────────────────────────────────────────────*/
     /*  Data Structures                                                */
@@ -95,11 +97,11 @@ contract TransparentSubscriptions {
     /*──────────────────────────────────────────────────────────────────*/
     function registerOffering(uint256 price, uint64 period) external returns (uint32 id) {
         require(price > 0, "price=0");
-        require(period >= 60, "period<60s");
+        require(period >= TICK_INTERVAL_SECONDS, "cannot charge faster than tick interval");
         id = nextOfferingId++;
         offerings[id] = Offering(msg.sender, price, period, true);
         emit OfferingRegistered(id, msg.sender, price, period);
-        if (id == 0) _scheduleNextTick();
+        // if (id == 0) _scheduleNextTick();
     }
 
     function updateOffering(uint32 id, uint256 price, uint64 period, bool active)
@@ -226,7 +228,12 @@ contract TransparentSubscriptions {
     function _scheduleNextTick() internal {
         uint64 expiry = uint64(block.timestamp + 2 * TICK_INTERVAL_SECONDS);
         bytes memory data = abi.encodeWithSelector(this.processTick.selector);
-        require(SCHEDULER.scheduleCall(address(this), address(this), expiry, data), "schedule fail");
+        require(SCHEDULER.scheduleCall(
+            address(this), 
+            address(this), 
+            expiry, 
+            GAS_LIMIT,
+            data), "schedule fail");
     }
 
     /*──────────────────────────────────────────────────────────────────*/
