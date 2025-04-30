@@ -13,7 +13,6 @@ import com.hedera.hapi.node.hooks.PureEvmHook;
 import com.hedera.hapi.node.state.hooks.EvmHookType;
 import com.hedera.services.bdd.spec.SpecOperation;
 import edu.umd.cs.findbugs.annotations.NonNull;
-
 import java.util.Objects;
 
 /**
@@ -29,15 +28,13 @@ public class HookInstaller {
     private final HookChargingSpec chargingSpec;
     private final long defaultGasLimit;
 
-
     /**
      * Returns a {@link HookInstaller} for a lambda hook using the given index.
      * @param index the index of the hook
      * @return a {@link HookInstaller} for a lambda hook
      */
     public static HookInstaller lambdaAt(final long index) {
-        return new HookInstaller(
-                EvmHookType.LAMBDA, DEFAULT_CHARGING_SPEC, NO_DEFAULT_GAS_LIMIT, index);
+        return new HookInstaller(EvmHookType.LAMBDA, DEFAULT_CHARGING_SPEC, NO_DEFAULT_GAS_LIMIT, index);
     }
 
     private HookInstaller(
@@ -69,7 +66,9 @@ public class HookInstaller {
                 .chargingSpec(chargingSpec);
         switch (type) {
             case PURE -> builder.pureEvmHook(PureEvmHook.newBuilder().spec(specBuilder));
-            case LAMBDA -> builder.lambdaEvmHook(LambdaEvmHook.newBuilder().spec(specBuilder).build());
+            case LAMBDA ->
+                builder.lambdaEvmHook(
+                        LambdaEvmHook.newBuilder().spec(specBuilder).build());
         }
         return builder.build();
     }

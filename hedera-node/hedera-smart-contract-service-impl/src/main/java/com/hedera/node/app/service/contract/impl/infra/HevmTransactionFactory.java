@@ -279,8 +279,8 @@ public class HevmTransactionFactory {
             @NonNull final TransactionBody body, @NonNull final HandleException exception) {
         final var gasPrice =
                 switch (body.data().kind()) {
-                    case CONTRACT_CREATE_INSTANCE -> body.contractCreateInstanceOrThrow()
-                            .gas();
+                    case CONTRACT_CREATE_INSTANCE ->
+                        body.contractCreateInstanceOrThrow().gas();
                     case CONTRACT_CALL -> body.contractCallOrThrow().gas();
                     case ETHEREUM_TRANSACTION -> {
                         final var ethTxData = assertValidEthTx(body.ethereumTransactionOrThrow());

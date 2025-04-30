@@ -17,7 +17,7 @@ updated: 2025-02-19
 ## Abstract
 
 We propose **hooks**, programmable Hiero extension points that let users customize the behavior of their entities.
-In principle, hooks could be programmed in any language, but we begin with **EVM hooks**. Users program EVM hooks 
+In principle, hooks could be programmed in any language, but we begin with **EVM hooks**. Users program EVM hooks
 by writing contracts in a language like Solidity that compiles to EVM bytecode. EVM hooks are either **pure**
 (using neither storage nor external contracts); or **lambdas** (like code running in a cloud's event-driven compute
 offering, which may access a database to use state or call other external services). Users can install multiple
@@ -25,10 +25,10 @@ hooks at different **indexes** on the same entity, until they reach a configured
 
 As a first Hiero extension point, we propose **allowance hooks**. Users can install these hooks on their accounts.
 A Hiero API (HAPI) `CryptoTransfer` transaction can then reference a hook allowance just as it does an ERC-style
-allowance defined in [HIP-376](https://hips.hedera.com/hip/hip-376). The network uses the hook by calling its EVM bytecode at a specific function 
-signature, passing in the details of the transfers proposed in the transaction. If the hook returns `true`, the network 
-continues executing the transfer; otherwise the network rejects the transfer. Installing a hook on an account is 
-analogous to adding a function to a smart contract; the hook executes with the account's privileges when calling 
+allowance defined in [HIP-376](https://hips.hedera.com/hip/hip-376). The network uses the hook by calling its EVM bytecode at a specific function
+signature, passing in the details of the transfers proposed in the transaction. If the hook returns `true`, the network
+continues executing the transfer; otherwise the network rejects the transfer. Installing a hook on an account is
+analogous to adding a function to a smart contract; the hook executes with the account's privileges when calling
 Hedera system contracts, just as a smart contract's functions do.
 
 Unlike smart contracts, which must encapsulate trust guarantees for multiple parties, lambdas belong to a single
@@ -58,7 +58,7 @@ on a Hiero network while maintaining the performance and integrity of the native
 
 ## Specification
 
-First we specify how a Hiero network will charge, throttle, and execute EVM hooks. (Non-EVM hook programming models 
+First we specify how a Hiero network will charge, throttle, and execute EVM hooks. (Non-EVM hook programming models
 would need their own specifications.)
 
 The protobuf API for hooks in general, and EVM hooks in particular, follows in later sections.
@@ -133,13 +133,14 @@ contract HookContract {
 }
 ```
 
-Because a hook is conceptually a function of the installing account, when it calls a Hedera system contract, the system 
-contract will see that account's address as the sender. If a hook calls another contract, it is valid for that contract 
+Because a hook is conceptually a function of the installing account, when it calls a Hedera system contract, the system
+contract will see that account's address as the sender. If a hook calls another contract, it is valid for that contract
 to call back to the hook at address `0x16d`.
 
 ### Core HAPI protobufs
 
 A hook's extension point is one of an enumeration which now includes only the account allowance hook,
+
 ```protobuf
 /***
  * The Hiero extension points that accept a hook.

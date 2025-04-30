@@ -41,7 +41,7 @@ contract TransparentSubscriptions {
     ICallScheduler internal constant SCHEDULER =
         ICallScheduler(0x000000000000000000000000000000000000016D);
 
-    uint256 public constant MAX_SETTLEMENTS_PER_TICK = 50;
+    uint256 public constant MAX_SETTLEMENTS_PER_TICK = 8;
     uint256 public constant GAS_LIMIT                = 500000;
     uint64  public constant TICK_INTERVAL_SECONDS    = 1;
 
@@ -76,7 +76,14 @@ contract TransparentSubscriptions {
     /*──────────────────────────────────────────────────────────────────*/
     /*  Events                                                         */
     /*──────────────────────────────────────────────────────────────────*/
-    event OfferingRegistered(uint32 indexed id, address provider, uint256 price, uint64 period);
+    event OfferingRegistered(
+        uint32  indexed id,
+        address indexed provider,
+        uint256 price,
+        uint64  period,
+        string  name,
+        string  description
+    );
     event OfferingUpdated   (uint32 indexed id, uint256 price, uint64 period, bool active);
 
     event Subscribed  (uint32 indexed id, address subscriber, uint64 nextPay);
@@ -95,12 +102,29 @@ contract TransparentSubscriptions {
     /*──────────────────────────────────────────────────────────────────*/
     /*  Provider API                                                   */
     /*──────────────────────────────────────────────────────────────────*/
-    function registerOffering(uint256 price, uint64 period) external returns (uint32 id) {
+    /**
+     * Register a new recurring offering.
+     *
+     * @param name         Short display name (emitted only)
+     * @param description  Free‑form description (emitted only)
+     * @param price        Amount charged *per period*
+     * @param period       Billing period in seconds (≥ 60)
+     */
+    function registerOffering(
+        string calldata name,
+        string calldata description,
+        uint256 price,
+        uint64  period
+    ) external returns (uint32 id) {
         require(price > 0, "price=0");
-        require(period >= TICK_INTERVAL_SECONDS, "cannot charge faster than tick interval");
+        require(period >= TICK_INTERVAL_SECONDS, "period too short");
+
         id = nextOfferingId++;
         offerings[id] = Offering(msg.sender, price, period, true);
-        emit OfferingRegistered(id, msg.sender, price, period);
+
+        emit OfferingRegistered(id, msg.sender, price, period, name, description);
+
+        // TODO - when 0x16d is updated
         // if (id == 0) _scheduleNextTick();
     }
 
@@ -149,15 +173,20 @@ contract TransparentSubscriptions {
     /*  Tick Processing                                                */
     /*──────────────────────────────────────────────────────────────────*/
     function processTick() external {
-        uint256 settled;
+        uint256 settled = 0;
         uint32 totalOfferings = nextOfferingId;
-        if (totalOfferings == 0) { _scheduleNextTick(); return; }
+        if (totalOfferings == 0) { 
+          // TODO - when 0x16d is updated
+          // _scheduleNextTick(); 
+          return; 
+        }
 
         // Ensure cursors point to a valid starting place.
         _seekNextNonEmptyOffering(totalOfferings);
 
-        uint32 safety = uint32(MAX_SETTLEMENTS_PER_TICK) * uint32(2); // loop guard
-        while (settled < MAX_SETTLEMENTS_PER_TICK && safety-- > 0) {
+        uint256 safety = MAX_SETTLEMENTS_PER_TICK * 2;
+        while (safety > 0) {
+            safety--;
             address sub = subscriberCursor;
             Subscription storage s = subs[offeringCursor][sub];
             Offering     storage o = offerings[offeringCursor];
@@ -176,7 +205,8 @@ contract TransparentSubscriptions {
             }
         }
 
-        _scheduleNextTick();
+        // TODO - when 0x16d is updated
+        // _scheduleNextTick();
     }
 
     /*──────────────────────────────────────────────────────────────────*/

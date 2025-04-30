@@ -41,7 +41,6 @@ import com.hedera.hapi.node.base.HookCall;
 import com.hedera.node.app.hapi.fees.usage.SigUsage;
 import com.hedera.node.app.hapi.utils.fee.SigValueObj;
 import com.hedera.node.app.hapi.utils.forensics.RecordStreamEntry;
-import com.hedera.pbj.runtime.JsonCodec;
 import com.hedera.services.bdd.spec.HapiPropertySource;
 import com.hedera.services.bdd.spec.HapiSpec;
 import com.hedera.services.bdd.spec.SpecOperation;
@@ -84,7 +83,6 @@ import java.io.UncheckedIOException;
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Instant;
@@ -139,7 +137,8 @@ public class TxnUtils {
      * @param callData the call data to be passed to the EVM hook
      * @return the {@link HookCall}
      */
-    public static HookCall evmHookCall(final long index, @NonNull final com.hedera.pbj.runtime.io.buffer.Bytes callData) {
+    public static HookCall evmHookCall(
+            final long index, @NonNull final com.hedera.pbj.runtime.io.buffer.Bytes callData) {
         requireNonNull(callData);
         return HookCall.newBuilder()
                 .index(index)
