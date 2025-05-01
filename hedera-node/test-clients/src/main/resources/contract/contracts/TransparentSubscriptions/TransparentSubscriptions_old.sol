@@ -158,6 +158,10 @@ contract TransparentSubscriptions {
             subs[id][oldHead].prevSubscriber = msg.sender;
         }
         firstSubs[id] = msg.sender;
+        // If this is the only subscriber, ensure nextSubscriber is null (end of the list)
+        if (oldHead == address(0)) {
+            s.nextSubscriber = address(0);
+        }
         emit Subscribed(id, msg.sender, s.nextPaymentTime);
     }
 
