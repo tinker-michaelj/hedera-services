@@ -34,7 +34,7 @@ public record BlockStreamConfig(
         @ConfigProperty(defaultValue = "/opt/hgcapp/data/config") @NodeProperty String blockNodeConnectionFileDir,
         @ConfigProperty(defaultValue = "32") @NetworkProperty int hashCombineBatchSize,
         @ConfigProperty(defaultValue = "1") @NetworkProperty int roundsPerBlock,
-        @ConfigProperty(defaultValue = "2s") @Min(0) @NetworkProperty Duration blockPeriod,
+        @ConfigProperty(defaultValue = "1s") @Min(0) @NetworkProperty Duration blockPeriod,
         @ConfigProperty(defaultValue = "2") @NetworkProperty long waitPeriodForActiveConnection,
         @ConfigProperty(defaultValue = "256") @NetworkProperty int blockItemBatchSize,
         @ConfigProperty(defaultValue = "localhost") String grpcAddress,

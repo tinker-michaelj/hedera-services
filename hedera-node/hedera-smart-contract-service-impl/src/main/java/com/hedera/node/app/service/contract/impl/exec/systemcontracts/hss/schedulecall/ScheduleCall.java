@@ -4,6 +4,7 @@ package com.hedera.node.app.service.contract.impl.exec.systemcontracts.hss.sched
 import static com.hedera.node.app.service.contract.impl.exec.systemcontracts.FullResult.successResult;
 import static com.hedera.node.app.service.contract.impl.exec.systemcontracts.common.Call.PricedResult.gasOnly;
 import static com.hedera.node.app.service.contract.impl.exec.systemcontracts.hss.schedulecall.ScheduleCallTranslator.SCHEDULED_CALL;
+import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.proxyUpdaterFor;
 import static java.util.Objects.requireNonNull;
 
 import com.esaulpaugh.headlong.abi.Tuple;
@@ -78,7 +79,7 @@ public class ScheduleCall extends AbstractCall {
     @NonNull
     public PricedResult execute(@NonNull final MessageFrame frame) {
         // Create the native call implied by the call data passed to scheduleNative()
-        final var scheduleCreateTransactionBody = bodyForScheduleCreate(bodyForInnerScheduleCreate());
+        final var scheduleCreateTransactionBody = bodyForScheduleCreate(bodyForInnerScheduleCreate(frame));
         final var gasRequirement = dispatchGasCalculator.gasRequirement(
                 scheduleCreateTransactionBody, gasCalculator, enhancement, payerID);
         final var recordBuilder = systemContractOperations()
@@ -120,8 +121,9 @@ public class ScheduleCall extends AbstractCall {
                 .build();
     }
 
-    private SchedulableTransactionBody bodyForInnerScheduleCreate() {
+    private SchedulableTransactionBody bodyForInnerScheduleCreate(MessageFrame frame) {
         return SchedulableTransactionBody.newBuilder()
+                .memo(proxyUpdaterFor(frame).entropy().toHexString())
                 .contractCall(ContractCallTransactionBody.newBuilder()
                         .contractID(destContractID)
                         .gas(gasLimit.longValue())

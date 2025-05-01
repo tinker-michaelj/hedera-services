@@ -16,6 +16,8 @@ import com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.EntityTyp
 import edu.umd.cs.findbugs.annotations.NonNull;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.tuweni.bytes.Bytes;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.evm.frame.MessageFrame;
@@ -26,6 +28,8 @@ import org.hyperledger.besu.evm.gascalculator.GasCalculator;
  */
 @Singleton
 public class HssSystemContract extends AbstractNativeSystemContract implements HederaSystemContract {
+    private static final Logger log = LogManager.getLogger(HssSystemContract.class);
+
     public static final String HSS_SYSTEM_CONTRACT_NAME = "HSS";
     public static final String HSS_EVM_ADDRESS = "0x16b";
     // The system contract ID always uses shard 0 and realm 0 so we cannot use ConversionUtils methods for this
@@ -57,6 +61,9 @@ public class HssSystemContract extends AbstractNativeSystemContract implements H
             return haltResult(NOT_SUPPORTED, frame.getRemainingGas());
         }
 
-        return super.computeFully(contractID, input, frame);
+        log.info("Computing fully...");
+        final var result = super.computeFully(contractID, input, frame);
+        log.info("Got result status {}", requireNonNull(result.recordBuilder()).status());
+        return result;
     }
 }

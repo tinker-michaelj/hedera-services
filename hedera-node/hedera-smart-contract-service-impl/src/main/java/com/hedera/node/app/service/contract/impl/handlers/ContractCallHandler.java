@@ -28,12 +28,16 @@ import javax.inject.Provider;
 import javax.inject.Singleton;
 import org.apache.tuweni.bytes.Bytes;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class contains all workflow-related functionality regarding {@link HederaFunctionality#CONTRACT_CALL}.
  */
 @Singleton
 public class ContractCallHandler extends AbstractContractTransactionHandler {
+    private static final Logger log = LoggerFactory.getLogger(ContractCallHandler.class);
+
     /**
      * Constructs a {@link ContractCallHandler} with the given {@link Provider} and {@link GasCalculator}.
      *
@@ -59,6 +63,7 @@ public class ContractCallHandler extends AbstractContractTransactionHandler {
         // Assemble the appropriate top-level record for the result
         outcome.addCallDetailsTo(context.savepointStack().getBaseBuilder(ContractCallStreamBuilder.class));
 
+        log.info("Call outcome status - {}", outcome.status());
         throwIfUnsuccessful(outcome.status());
     }
 

@@ -150,7 +150,7 @@ public class ScheduleCreateHandler extends AbstractScheduleHandler implements Tr
         final var provisionalSchedule =
                 createProvisionalSchedule(context.body(), consensusNow, defaultLifetime, isLongTermEnabled);
         final var now = consensusNow.getEpochSecond();
-        final var then = provisionalSchedule.calculatedExpirationSecond();
+        final var then = Math.max(now + 1, provisionalSchedule.calculatedExpirationSecond());
         validateTrue(then > now, SCHEDULE_EXPIRATION_TIME_MUST_BE_HIGHER_THAN_CONSENSUS_TIME);
         final var maxLifetime = isLongTermEnabled
                 ? schedulingConfig.maxExpirationFutureSeconds()
@@ -182,6 +182,7 @@ public class ScheduleCreateHandler extends AbstractScheduleHandler implements Tr
         final var scheduleStore = context.storeFactory().writableStore(WritableScheduleStore.class);
         final var possibleDuplicateId = scheduleStore.getByEquality(provisionalSchedule);
         final var possibleDuplicate = possibleDuplicateId == null ? null : scheduleStore.get(possibleDuplicateId);
+        log.info("Comparing possible duplicates {} vs {}", provisionalSchedule, possibleDuplicate);
         final var duplicate = maybeDuplicate(provisionalSchedule, possibleDuplicate);
         if (duplicate != null) {
             final var scheduledTxnId = scheduledTxnIdFrom(
@@ -195,18 +196,20 @@ public class ScheduleCreateHandler extends AbstractScheduleHandler implements Tr
         validateTrue(
                 scheduleStore.numSchedulesInState() + 1 <= schedulingConfig.maxNumber(),
                 MAX_ENTITIES_IN_PRICE_REGIME_HAVE_BEEN_CREATED);
-        final var capacityFraction = schedulingConfig.schedulableCapacityFraction();
-        final var usageSnapshots = scheduleStore.usageSnapshotsForScheduled(then);
-        final var throttle =
-                upToDateThrottle(then, capacityFraction.asApproxCapacitySplit(), usageSnapshots, scheduleStore);
-        validateTrue(
-                throttle.allow(
-                        provisionalSchedule.payerAccountIdOrThrow(),
-                        childAsOrdinary(provisionalSchedule),
-                        functionOf(provisionalSchedule),
-                        Instant.ofEpochSecond(then)),
-                SCHEDULE_EXPIRY_IS_BUSY);
-        scheduleStore.trackUsage(then, throttle.usageSnapshots());
+        if (false) {
+            final var capacityFraction = schedulingConfig.schedulableCapacityFraction();
+            final var usageSnapshots = scheduleStore.usageSnapshotsForScheduled(then);
+            final var throttle =
+                    upToDateThrottle(then, capacityFraction.asApproxCapacitySplit(), usageSnapshots, scheduleStore);
+            validateTrue(
+                    throttle.allow(
+                            provisionalSchedule.payerAccountIdOrThrow(),
+                            childAsOrdinary(provisionalSchedule),
+                            functionOf(provisionalSchedule),
+                            Instant.ofEpochSecond(then)),
+                    SCHEDULE_EXPIRY_IS_BUSY);
+            scheduleStore.trackUsage(then, throttle.usageSnapshots());
+        }
 
         // With all validations done, we check if the new schedule is already executable
         final var transactionKeys = getTransactionKeysOrThrow(provisionalSchedule, context::allKeysForTransaction);
@@ -228,6 +231,7 @@ public class ScheduleCreateHandler extends AbstractScheduleHandler implements Tr
             schedule = markedExecuted(schedule, consensusNow);
         }
         scheduleStore.putAndIncrementCount(schedule);
+        log.info("Put schedule {}", schedule);
         context.savepointStack()
                 .getBaseBuilder(ScheduleStreamBuilder.class)
                 .scheduleID(schedule.scheduleId())

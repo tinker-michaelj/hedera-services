@@ -59,4 +59,6 @@ public @interface Contract {
      * resources directory for the contract.
      */
     String variant() default "";
+
+    long initialBalance() default 0L;
 }

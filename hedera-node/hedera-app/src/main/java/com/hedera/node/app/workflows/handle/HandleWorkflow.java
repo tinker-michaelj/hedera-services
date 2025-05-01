@@ -548,6 +548,7 @@ public class HandleWorkflow {
             final var writableStates = state.getWritableStates(ScheduleService.NAME);
             // Configuration sets a maximum number of execution slots per user transaction
             int n = schedulingConfig.maxExecutionsPerUserTxn();
+            logger.info("Considering @ {}", consensusNow.getEpochSecond());
             while (iter.hasNext() && !nextTime.isAfter(lastUsableTime) && n > 0) {
                 final var executableTxn = iter.next();
                 if (schedulingConfig.longTermEnabled()) {
@@ -555,7 +556,11 @@ public class HandleWorkflow {
                     if (streamMode == BOTH) {
                         blockRecordManager.startUserTransaction(nextTime, state);
                     }
+                    logger.info("Trying to execute {}", executableTxn.body());
                     final var handleOutput = executeScheduled(state, nextTime, creatorInfo, executableTxn);
+                    logger.info(
+                            "Got response {}",
+                            handleOutput.blockRecordSourceOrThrow().identifiedReceipts());
                     handleOutput.blockRecordSourceOrThrow().forEachItem(blockStreamManager::writeItem);
                     if (streamMode == BOTH) {
                         final var records =

@@ -53,6 +53,7 @@ public class SpecContract extends AbstractSpecEntity<SpecOperation, Account>
     public static final String VARIANT_167 = "167";
 
     private final long creationGas;
+    private final long initialBalance;
     private final String contractName;
     private final boolean immutable;
     private final boolean lambda;
@@ -76,6 +77,7 @@ public class SpecContract extends AbstractSpecEntity<SpecOperation, Account>
         final var name = annotation.name().isBlank() ? annotation.contract() : annotation.name();
         return new SpecContract(
                 name,
+                annotation.initialBalance(),
                 annotation.contract(),
                 annotation.creationGas(),
                 annotation.isImmutable(),
@@ -86,6 +88,7 @@ public class SpecContract extends AbstractSpecEntity<SpecOperation, Account>
 
     private SpecContract(
             @NonNull final String name,
+            long initialBalance,
             @NonNull final String contractName,
             final long creationGas,
             final boolean immutable,
@@ -93,6 +96,7 @@ public class SpecContract extends AbstractSpecEntity<SpecOperation, Account>
             @NonNull final String variant,
             final boolean lambda) {
         super(name);
+        this.initialBalance = initialBalance;
         this.immutable = immutable;
         this.lambda = lambda;
         this.creationGas = creationGas;
@@ -266,6 +270,7 @@ public class SpecContract extends AbstractSpecEntity<SpecOperation, Account>
             op = blockingOrder(
                     createLargeFile(GENESIS, contractName, initcode),
                     contractCreate(name, constructorArgs)
+                            .balance(initialBalance)
                             .gas(creationGas)
                             .maxAutomaticTokenAssociations(maxAutoAssociations)
                             .bytecode(contractName)

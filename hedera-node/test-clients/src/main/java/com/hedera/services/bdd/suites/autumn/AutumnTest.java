@@ -2,12 +2,19 @@
 package com.hedera.services.bdd.suites.autumn;
 
 import static com.hedera.services.bdd.spec.HapiSpec.hapiTest;
+import static com.hedera.services.bdd.spec.transactions.TxnUtils.tinyBarsFromTo;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoApproveAllowance;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoCreate;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoTransfer;
+import static com.hedera.services.bdd.spec.transactions.crypto.HapiCryptoTransfer.tinyBarsFromTo;
 import static com.hedera.services.bdd.spec.utilops.CustomSpecAssert.allRunFor;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.inParallel;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.logIt;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.withOpContext;
+import static com.hedera.services.bdd.suites.HapiSuite.DEFAULT_PAYER;
+import static com.hedera.services.bdd.suites.HapiSuite.GENESIS;
 import static com.hedera.services.bdd.suites.HapiSuite.ONE_HUNDRED_HBARS;
+import static com.hedera.services.bdd.suites.HapiSuite.ONE_MILLION_HBARS;
 
 import com.hedera.services.bdd.junit.HapiTest;
 import com.hedera.services.bdd.spec.SpecOperation;
@@ -35,7 +42,11 @@ public class AutumnTest {
 
     @HapiTest
     final Stream<DynamicTest> createAndUse(
-            @Contract(contract = "TransparentSubscriptions", creationGas = 5_000_000) SpecContract contract) {
+            @Contract(
+                            contract = "TransparentSubscriptions",
+                            initialBalance = ONE_MILLION_HBARS,
+                            creationGas = 5_000_000)
+                    SpecContract contract) {
         final int numCreators = 5;
         final int numSubscribers = 15;
         final int minSubInterval = 1;
@@ -51,6 +62,9 @@ public class AutumnTest {
         final Supplier<String> randomSubscriber = () -> "subscriber" + RANDOM.nextInt(subscriberIds.size());
         final AtomicInteger secondsRemaining = new AtomicInteger(120);
         final Set<Subscription> existing = ConcurrentHashMap.newKeySet();
+
+        final boolean externalTicks = false;
+
         return hapiTest(
                 inParallel(IntStream.range(0, numCreators)
                         .mapToObj(i -> cryptoCreate("creator" + i)
@@ -77,6 +91,12 @@ public class AutumnTest {
                         })
                         .toArray(SpecOperation[]::new)),
                 logIt(ignore -> "Created " + numInitialOfferings + " initial offerings"),
+                cryptoTransfer(tinyBarsFromTo(GENESIS, contract.name(), ONE_MILLION_HBARS)),
+                inParallel(IntStream.range(0, numSubscribers)
+                        .mapToObj(i -> cryptoApproveAllowance()
+                                .addCryptoAllowance("subscriber" + i, contract.name(), Long.MAX_VALUE)
+                                .signedBy(DEFAULT_PAYER, "subscriber" + i))
+                        .toArray(SpecOperation[]::new)),
                 withOpContext((spec, opLog) -> {
                     opLog.info("Offering ids: {}", offeringIds);
                     opLog.info("Creator ids: {}", creatorIds);
@@ -105,14 +125,20 @@ public class AutumnTest {
                                 continue;
                             }
                             final var subscriberId = spec.registry().getAccountID(subscriber);
-                            opLog.info("SUBSCRIBING {} (0.0.{}) to offering #{}", subscriber, subscriberId.getAccountNum(), choice);
+                            opLog.info(
+                                    "SUBSCRIBING {} (0.0.{}) to offering #{}",
+                                    subscriber,
+                                    subscriberId.getAccountNum(),
+                                    choice);
                             allRunFor(
                                     spec,
                                     contract.call("subscribe", choice)
                                             .with(op -> op.payingWith(subscriber))
                                             .gas(500_000L));
                         }
-                        allRunFor(spec, contract.call("processTick").gas(5_000_000L));
+                        if (externalTicks) {
+                            allRunFor(spec, contract.call("processTick").gas(5_000_000L));
+                        }
                         TimeUnit.SECONDS.sleep(1);
                         opLog.info(">>>>");
                         opLog.info("==== {} TICKS REMAINING ====", tick);

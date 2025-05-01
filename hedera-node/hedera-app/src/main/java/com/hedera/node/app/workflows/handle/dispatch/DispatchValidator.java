@@ -87,7 +87,8 @@ public class DispatchValidator {
                     getPayerAccount(dispatch.readableStoreFactory(), dispatch.payerId(), dispatch.txnCategory());
             final var category = dispatch.txnCategory();
             // Check payer signature for all batch inner transactions, scheduled, and user transactions
-            final var requiresPayerSig = category == SCHEDULED || category == USER || category == BATCH_INNER;
+            final var requiresPayerSig =
+                    (category == SCHEDULED && !payer.smartContract()) || category == USER || category == BATCH_INNER;
             if (requiresPayerSig && !isHollow(payer)) {
                 // Skip payer verification for hollow accounts because ingest only submits valid signatures
                 // for hollow payers; and if an account is still hollow here, its alias cannot have changed
