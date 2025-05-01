@@ -104,6 +104,8 @@ public class AutumnTest {
                             if (!existing.add(subscription)) {
                                 continue;
                             }
+                            final var subscriberId = spec.registry().getAccountID(subscriber);
+                            opLog.info("SUBSCRIBING {} (0.0.{}) to offering #{}", subscriber, subscriberId.getAccountNum(), choice);
                             allRunFor(
                                     spec,
                                     contract.call("subscribe", choice)
