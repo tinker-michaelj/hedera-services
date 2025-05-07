@@ -254,8 +254,8 @@ public class TxnUtils {
     public static AccountID asIdForKeyLookUp(final String s, final HapiSpec lookupSpec) {
         if (isLiteralEvmAddress(s)) {
             return AccountID.newBuilder()
-                    .setShardNum(shard)
-                    .setRealmNum(realm)
+                    .setShardNum(lookupSpec.shard())
+                    .setRealmNum(lookupSpec.realm())
                     .setAlias(asLiteralEvmAddress(s))
                     .build();
         }
