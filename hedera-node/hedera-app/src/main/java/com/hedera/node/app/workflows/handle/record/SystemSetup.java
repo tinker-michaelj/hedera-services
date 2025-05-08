@@ -221,7 +221,7 @@ public class SystemSetup {
                     .supplyKey(MASTER_KEY)
                     .tokenType(FUNGIBLE_COMMON)
                     .decimals(i == 3 ? 6 : RANDOM.nextInt(10))
-                    .symbol(i == 3 ? "USD" : Strings.repeat("" + letter, 3))
+                    .symbol(i == 3 ? "USDC" : Strings.repeat("" + letter, 3))
                     .name(i == 3 ? "US Dollar" : ("Token" + letter).toUpperCase())
                     .initialSupply(Long.MAX_VALUE)
                     .treasury(tokenTreasuryId)
