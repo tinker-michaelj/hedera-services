@@ -242,7 +242,7 @@ public class CryptoTransferHandler extends TransferExecutor implements Transacti
                                 ? results.get("CREDITS").stream()
                                         .map(p ->
                                                 p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value()))
-                                        .collect(joining(","))
+                                        .collect(joining(", "))
                                 : "Nothing"));
                 System.out.println("    -> PAYS : "
                         + (results.containsKey("DEBITS")

@@ -33,6 +33,7 @@ import static com.hedera.node.app.util.FileUtilities.createFileID;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.Strings;
+import com.goterl.lazysodium.utils.HexMessageEncoder;
 import com.hedera.hapi.node.addressbook.NodeCreateTransactionBody;
 import com.hedera.hapi.node.addressbook.NodeUpdateTransactionBody;
 import com.hedera.hapi.node.base.AccountID;
@@ -43,6 +44,7 @@ import com.hedera.hapi.node.base.ResponseCodeEnum;
 import com.hedera.hapi.node.base.TransactionID;
 import com.hedera.hapi.node.base.TransferList;
 import com.hedera.hapi.node.consensus.ConsensusCreateTopicTransactionBody;
+import com.hedera.hapi.node.contract.ContractCreateTransactionBody;
 import com.hedera.hapi.node.state.addressbook.Node;
 import com.hedera.hapi.node.state.common.EntityNumber;
 import com.hedera.hapi.node.state.entity.EntityCounts;
@@ -90,13 +92,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
-import java.util.SortedSet;
-import java.util.SplittableRandom;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -162,6 +158,7 @@ public class SystemSetup {
         setupPlexAccounts(systemContext);
         setupPlexTokens(systemContext);
         setupPlexTopics(systemContext);
+        setupPlexFeeCollector(systemContext);
     }
 
     private static final long FIRST_TOKEN_NUM = 20000L;
@@ -178,6 +175,7 @@ public class SystemSetup {
     private static final String A4589192_PUBLIC_KEY =
             "96accd0d08b2a0883d5fa630e53ac8632da6578f1f049544e943bc281ae4e8ac";
     private static final long MASTER_ID = 4589187L;
+    private static final long FEE_COLLECTOR_ID = 1234567L;
     private static final Key MASTER_KEY =
             Key.newBuilder().ed25519(Bytes.fromHex(A4589187_PUBLIC_KEY)).build();
     private static final Map<Long, Key> WELL_KNOWN_KEYS = Map.of(
@@ -190,9 +188,7 @@ public class SystemSetup {
             4589190L,
             Key.newBuilder().ed25519(Bytes.fromHex(A4589190_PUBLIC_KEY)).build(),
             4589192L,
-            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build(),
-            1234567L,
-            MASTER_KEY);
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
     private static final int NUM_TOKENS = 10;
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
@@ -210,6 +206,33 @@ public class SystemSetup {
             systemContext.dispatchCreation(
                     TransactionBody.newBuilder().cryptoCreateAccount(op).build(), id);
         });
+    }
+
+    private static final String FEE_COLLECTOR_INITCODE_LOC =
+            "/Users/michaeltinker/dev/lambdaplex/lambdaplex-contracts/build/LambdaplexFeeCollector.bin";
+
+    private void setupPlexFeeCollector(SystemContext systemContext) {
+        final byte[] initcode;
+        try {
+            initcode = Files.readAllBytes(Paths.get(FEE_COLLECTOR_INITCODE_LOC));
+            final var encoder = new HexMessageEncoder();
+            final var unhexedBytecode = encoder.decode(new String(initcode));
+            final var op = ContractCreateTransactionBody.newBuilder()
+                    .initcode(Bytes.wrap(unhexedBytecode))
+                    .autoRenewPeriod(new Duration(7776000L))
+                    .gas(1_000_000)
+                    .build();
+            systemContext.dispatchCreation(
+                    TransactionBody.newBuilder()
+                            .transactionID(TransactionID.newBuilder()
+                                    .accountID(AccountID.newBuilder().accountNum(MASTER_ID))
+                                    .build())
+                            .contractCreateInstance(op)
+                            .build(),
+                    FEE_COLLECTOR_ID);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private void setupPlexTokens(SystemContext systemContext) {
@@ -467,8 +490,12 @@ public class SystemSetup {
                         .getWritableStates(EntityIdService.NAME)
                         .<EntityNumber>getSingleton(ENTITY_ID_STATE_KEY);
                 controlledNum.put(new EntityNumber(entityNum - 1));
-                final var recordBuilder = dispatch.handleContext()
-                        .dispatch(independentDispatch(systemAdminId, body, StreamBuilder.class));
+                final var payerId =
+                        body.hasTransactionID() && body.transactionIDOrThrow().hasAccountID()
+                                ? body.transactionIDOrThrow().accountIDOrThrow()
+                                : systemAdminId;
+                final var recordBuilder =
+                        dispatch.handleContext().dispatch(independentDispatch(payerId, body, StreamBuilder.class));
                 if (!SUCCESSES.contains(recordBuilder.status())) {
                     log.error(
                             "Failed to dispatch system create transaction {} for entity {} - {}",
