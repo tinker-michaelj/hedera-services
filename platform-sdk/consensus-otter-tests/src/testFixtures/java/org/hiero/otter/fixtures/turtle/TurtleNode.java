@@ -65,6 +65,7 @@ import org.hiero.otter.fixtures.logging.StructuredLog;
 import org.hiero.otter.fixtures.logging.internal.InMemoryAppender;
 import org.hiero.otter.fixtures.result.SingleNodeConsensusResult;
 import org.hiero.otter.fixtures.result.SingleNodeLogResult;
+import org.hiero.otter.fixtures.result.SingleNodeStatusProgression;
 import org.hiero.otter.fixtures.turtle.app.TurtleApp;
 import org.hiero.otter.fixtures.turtle.app.TurtleAppState;
 
@@ -95,8 +96,7 @@ public class TurtleNode implements Node, TurtleTimeManager.TimeTickReceiver {
     private final TurtleNodeConfiguration nodeConfiguration;
     private final NodeResultsCollector resultsCollector;
 
-    private final PlatformStatusChangeListener platformStatusChangeListener =
-            data -> TurtleNode.this.platformStatus = data.getNewStatus();
+    private final PlatformStatusChangeListener platformStatusChangeListener;
 
     private DeterministicWiringModel model;
     private Platform platform;
@@ -124,6 +124,11 @@ public class TurtleNode implements Node, TurtleTimeManager.TimeTickReceiver {
             this.network = requireNonNull(network);
             this.nodeConfiguration = new TurtleNodeConfiguration(outputDirectory);
             this.resultsCollector = new NodeResultsCollector(selfId);
+            this.platformStatusChangeListener = data -> {
+                final PlatformStatus newStatus = data.getNewStatus();
+                TurtleNode.this.platformStatus = newStatus;
+                resultsCollector.addPlatformStatus(newStatus);
+            };
 
         } finally {
             ThreadContext.remove(THREAD_CONTEXT_NODE_ID);
@@ -229,8 +234,8 @@ public class TurtleNode implements Node, TurtleTimeManager.TimeTickReceiver {
     /**
      * {@inheritDoc}
      */
-    @NonNull
     @Override
+    @NonNull
     public SingleNodeConsensusResult getConsensusResult() {
         return resultsCollector.getConsensusResult();
     }
@@ -243,6 +248,15 @@ public class TurtleNode implements Node, TurtleTimeManager.TimeTickReceiver {
     public SingleNodeLogResult getLogResult() {
         final List<StructuredLog> logs = InMemoryAppender.getLogs(selfId.id());
         return new SingleNodeLogResultImpl(selfId, logs);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @NonNull
+    public SingleNodeStatusProgression getStatusProgression() {
+        return resultsCollector.getStatusProgression();
     }
 
     /**

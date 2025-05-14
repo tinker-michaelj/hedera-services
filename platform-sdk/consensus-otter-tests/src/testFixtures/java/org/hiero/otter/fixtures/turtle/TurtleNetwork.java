@@ -35,10 +35,13 @@ import org.hiero.otter.fixtures.Node;
 import org.hiero.otter.fixtures.NodeFilter;
 import org.hiero.otter.fixtures.internal.result.MultipleNodeConsensusResultsImpl;
 import org.hiero.otter.fixtures.internal.result.MultipleNodeLogResultsImpl;
+import org.hiero.otter.fixtures.internal.result.MultipleNodeStatusProgressionImpl;
 import org.hiero.otter.fixtures.result.MultipleNodeConsensusResults;
 import org.hiero.otter.fixtures.result.MultipleNodeLogResults;
+import org.hiero.otter.fixtures.result.MultipleNodeStatusProgression;
 import org.hiero.otter.fixtures.result.SingleNodeConsensusResult;
 import org.hiero.otter.fixtures.result.SingleNodeLogResult;
+import org.hiero.otter.fixtures.result.SingleNodeStatusProgression;
 import org.hiero.otter.fixtures.turtle.app.TurtleTransaction;
 
 /**
@@ -205,8 +208,8 @@ public class TurtleNetwork implements Network, TurtleTimeManager.TimeTickReceive
     /**
      * {@inheritDoc}
      */
-    @NonNull
     @Override
+    @NonNull
     public MultipleNodeConsensusResults getConsensusResult(@Nullable NodeFilter... filters) {
         final NodeFilter combined = NodeFilter.andAll(filters);
         final List<SingleNodeConsensusResult> results =
@@ -224,6 +227,17 @@ public class TurtleNetwork implements Network, TurtleTimeManager.TimeTickReceive
                 nodes.stream().map(Node::getLogResult).toList();
 
         return new MultipleNodeLogResultsImpl(results);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @NonNull
+    public MultipleNodeStatusProgression getStatusProgression() {
+        final List<SingleNodeStatusProgression> statusProgressions =
+                nodes.stream().map(Node::getStatusProgression).toList();
+        return new MultipleNodeStatusProgressionImpl(statusProgressions);
     }
 
     /**
