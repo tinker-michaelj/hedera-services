@@ -5,6 +5,7 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import java.time.Duration;
 import java.util.List;
 import org.hiero.otter.fixtures.result.MultipleNodeConsensusResults;
+import org.hiero.otter.fixtures.result.MultipleNodeLogResults;
 
 /**
  * Interface representing a network of nodes.
@@ -79,4 +80,12 @@ public interface Network {
      */
     @NonNull
     MultipleNodeConsensusResults getConsensusResult(@NonNull NodeFilter... filters);
+
+    /**
+     * Gets the log results of all nodes.
+     *
+     * @return the log results of the nodes
+     */
+    @NonNull
+    MultipleNodeLogResults getLogResults();
 }
