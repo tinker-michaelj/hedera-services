@@ -19,7 +19,6 @@ import static com.hedera.services.bdd.junit.TestTags.INTEGRATION;
 import static com.hedera.services.bdd.junit.hedera.NodeSelector.byNodeId;
 import static com.hedera.services.bdd.junit.hedera.embedded.EmbeddedMode.REPEATABLE;
 import static com.hedera.services.bdd.junit.hedera.embedded.RepeatableEmbeddedHedera.DEFAULT_ROUND_DURATION;
-import static com.hedera.services.bdd.spec.HapiPropertySource.idAsHeadlongAddress;
 import static com.hedera.services.bdd.spec.HapiSpec.hapiTest;
 import static com.hedera.services.bdd.spec.assertions.ContractFnResultAsserts.resultWith;
 import static com.hedera.services.bdd.spec.assertions.ContractInfoAsserts.contractWith;
@@ -33,6 +32,7 @@ import static com.hedera.services.bdd.spec.keys.KeyShape.sigs;
 import static com.hedera.services.bdd.spec.keys.KeyShape.threshOf;
 import static com.hedera.services.bdd.spec.keys.SigControl.OFF;
 import static com.hedera.services.bdd.spec.keys.SigControl.ON;
+import static com.hedera.services.bdd.spec.keys.TrieSigMapGenerator.uniqueWithFullPrefixesFor;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getAccountBalance;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getAccountInfo;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getContractInfo;
@@ -41,6 +41,8 @@ import static com.hedera.services.bdd.spec.queries.QueryVerbs.getScheduleInfo;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getTxnRecord;
 import static com.hedera.services.bdd.spec.queries.crypto.ExpectedTokenRel.relationshipWith;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.asId;
+import static com.hedera.services.bdd.spec.transactions.TxnUtils.randomUppercase;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.atomicBatch;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.burnToken;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.contractCall;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.contractCreate;
@@ -51,11 +53,13 @@ import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoCreate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoDelete;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoTransfer;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoUpdate;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.fileCreate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.fileUpdate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.scheduleCreate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.scheduleDelete;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.scheduleSign;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.submitMessageTo;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.systemFileDelete;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.tokenAssociate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.tokenCreate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.tokenFeeScheduleUpdate;
@@ -78,11 +82,11 @@ import static com.hedera.services.bdd.spec.utilops.UtilVerbs.doWithStartupConfig
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.doingContextual;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.exposeSpecSecondTo;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.keyFromMutation;
-import static com.hedera.services.bdd.spec.utilops.UtilVerbs.logIt;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.newKeyNamed;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.overriding;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.overridingAllOf;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.overridingThrottles;
+import static com.hedera.services.bdd.spec.utilops.UtilVerbs.overridingTwo;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.scheduledExecutionResult;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.sleepFor;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.sleepForSeconds;
@@ -104,14 +108,19 @@ import static com.hedera.services.bdd.suites.HapiSuite.ONE_HUNDRED_HBARS;
 import static com.hedera.services.bdd.suites.HapiSuite.ONE_MILLION_HBARS;
 import static com.hedera.services.bdd.suites.HapiSuite.STAKING_REWARD;
 import static com.hedera.services.bdd.suites.HapiSuite.SYSTEM_ADMIN;
+import static com.hedera.services.bdd.suites.HapiSuite.THREE_MONTHS_IN_SECONDS;
 import static com.hedera.services.bdd.suites.HapiSuite.flattened;
 import static com.hedera.services.bdd.suites.contract.Utils.asAddress;
 import static com.hedera.services.bdd.suites.contract.Utils.getNestedContractAddress;
+import static com.hedera.services.bdd.suites.contract.Utils.idAsHeadlongAddress;
 import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.CREATE_TXN;
 import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.NEW_SENDER_KEY;
+import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.ORIG_FILE;
+import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.PAYING_ACCOUNT_2;
 import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.SENDER_KEY;
 import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.SENDER_TXN;
 import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.TRIGGERING_TXN;
+import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.VALID_SCHEDULE;
 import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.transferListCheck;
 import static com.hedera.services.bdd.suites.hip423.LongTermScheduleUtils.triggerSchedule;
 import static com.hedera.services.bdd.suites.integration.RepeatableScheduleLongTermExecutionTest.BASIC_XFER;
@@ -122,6 +131,7 @@ import static com.hederahashgraph.api.proto.java.HederaFunctionality.ConsensusCr
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.ACCOUNT_DELETED;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.BUSY;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.CONTRACT_REVERT_EXECUTED;
+import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.INNER_TRANSACTION_FAILED;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.INVALID_ALIAS_KEY;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.INVALID_FULL_PREFIX_SIGNATURE_FOR_PRECOMPILE;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.INVALID_MAX_AUTO_ASSOCIATIONS;
@@ -174,10 +184,9 @@ import com.hederahashgraph.api.proto.java.AccountID;
 import com.hederahashgraph.api.proto.java.Key;
 import com.hederahashgraph.api.proto.java.ResponseCodeEnum;
 import com.hederahashgraph.api.proto.java.TokenType;
-import com.swirlds.common.utility.CommonUtils;
 import com.swirlds.state.spi.ReadableKVState;
-import com.swirlds.state.spi.WritableKVState;
 import com.swirlds.state.test.fixtures.MapReadableKVState;
+import com.swirlds.state.test.fixtures.MapWritableKVState;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.math.BigInteger;
 import java.time.Duration;
@@ -194,6 +203,7 @@ import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+import org.hiero.base.utility.CommonUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.DynamicTest;
@@ -612,6 +622,7 @@ public class RepeatableHip423Tests {
                 "consensus.handle.maxPrecedingRecords",
                 "consensus.handle.maxFollowingRecords",
                 "scheduling.consTimeSeparationNanos",
+                "scheduling.reservedSystemTxnNanos",
             })
     final Stream<DynamicTest> executionPurgesScheduleStateAsWhenRunningOutOfConsensusTimes() {
         final var lastSecond = new AtomicLong();
@@ -625,7 +636,8 @@ public class RepeatableHip423Tests {
                 overridingAllOf(Map.of(
                         "consensus.handle.maxPrecedingRecords", "2",
                         "consensus.handle.maxFollowingRecords", "1",
-                        "scheduling.consTimeSeparationNanos", "15")),
+                        "scheduling.consTimeSeparationNanos", "16",
+                        "scheduling.reservedSystemTxnNanos", "1")),
                 // Schedule the four transfers to lucky you
                 sourcing(() -> scheduleCreate("one", cryptoTransfer(tinyBarsFromTo(DEFAULT_PAYER, "luckyYou", 1L)))
                         .waitForExpiry()
@@ -935,6 +947,7 @@ public class RepeatableHip423Tests {
                 scheduleSign("scheduleSign")
                         .payingWith("sender")
                         .alsoSigningWith("receiver")
+                        .sigMapPrefixes(uniqueWithFullPrefixesFor("receiver"))
                         .hasKnownStatusFrom(INVALID_SCHEDULE_ID)
                         .via("signTxn"),
                 validateChargedUsd("signTxn", 0.001));
@@ -1008,7 +1021,7 @@ public class RepeatableHip423Tests {
                 sleepForSeconds(THIRTY_MINUTES * 2),
 
                 // try to trigger the scheduled transaction with failing throttle
-                submitMessageTo((String) null).hasRetryPrecheckFrom(BUSY).hasKnownStatus(INVALID_TOPIC_ID),
+                submitMessageTo("0.0.0").hasRetryPrecheckFrom(BUSY).hasKnownStatus(INVALID_TOPIC_ID),
 
                 // the balance is changed
                 getAccountBalance(RECEIVER).hasTinyBars(1L));
@@ -1344,7 +1357,7 @@ public class RepeatableHip423Tests {
 
     @LeakyRepeatableHapiTest(
             value = NEEDS_VIRTUAL_TIME_FOR_FAST_EXECUTION,
-            overrides = {"scheduling.whitelist", "contracts.maxGasPerSec"})
+            overrides = {"scheduling.whitelist", "contracts.maxGasPerSec", "contracts.maxGasPerSecBackend"})
     @DisplayName("Gas throttle works as expected")
     final Stream<DynamicTest> gasThrottleWorksAsExpected() {
         final var contract = "TestContract";
@@ -1355,6 +1368,7 @@ public class RepeatableHip423Tests {
         final var gasToOffer = 2_000_000L;
         return hapiTest(flattened(
                 overriding("contracts.maxGasPerSec", "4000000"),
+                overriding("contracts.maxGasPerSecBackend", "4000000"),
                 cryptoCreate("PAYING_ACCOUNT"),
                 uploadTestContracts(contract),
                 contractCreate(contract, addressTwo, BigInteger.ONE)
@@ -1566,9 +1580,7 @@ public class RepeatableHip423Tests {
                         .payingWith(PAYING_ACCOUNT)
                         .recordingScheduledTxn()
                         .via(CREATE_TX),
-                logIt("WTF"),
                 scheduleSign(BASIC_XFER).alsoSigningWith(SENDER).via(SIGN_TX),
-                logIt("SERIOUSLY"),
                 getScheduleInfo(BASIC_XFER)
                         .hasScheduleId(BASIC_XFER)
                         .hasWaitForExpiry()
@@ -1691,6 +1703,52 @@ public class RepeatableHip423Tests {
                         .hasRecordedScheduledTxn(),
                 triggerSchedule(schedule, 10),
                 getAccountBalance(receiver).hasTinyBars(1L)));
+    }
+
+    @RepeatableHapiTest(NEEDS_VIRTUAL_TIME_FOR_FAST_EXECUTION)
+    final Stream<DynamicTest> scheduledSystemDeleteUnauthorizedPayerFails() {
+        return hapiTest(
+                cryptoCreate(PAYING_ACCOUNT).via("creation"),
+                cryptoCreate(PAYING_ACCOUNT_2),
+                fileCreate("tbd").lifetime(THREE_MONTHS_IN_SECONDS).contents(ORIG_FILE),
+                scheduleCreate(VALID_SCHEDULE, systemFileDelete("tbd").updatingExpiry(1L))
+                        .withEntityMemo(randomUppercase(100))
+                        .designatingPayer(PAYING_ACCOUNT_2)
+                        .payingWith(PAYING_ACCOUNT)
+                        .waitForExpiry()
+                        .withRelativeExpiry("creation", 4)
+                        .hasKnownStatus(SCHEDULE_EXPIRY_IS_BUSY));
+    }
+
+    @LeakyRepeatableHapiTest(
+            value = NEEDS_VIRTUAL_TIME_FOR_FAST_EXECUTION,
+            overrides = {"atomicBatch.isEnabled", "atomicBatch.maxNumberOfTransactions"})
+    @DisplayName("Failing batch will trigger schedule")
+    // BATCH_14
+    final Stream<DynamicTest> failingBatchWillTriggerSchedule() {
+        final var sender = "sender";
+        final var receiver = "receiver";
+        final var schedule = "scheduledXfer";
+        final var batchOperator = "batchOperator";
+        return hapiTest(
+                overridingTwo("atomicBatch.isEnabled", "true", "atomicBatch.maxNumberOfTransactions", "50"),
+                cryptoCreate(batchOperator),
+                cryptoCreate(sender).balance(ONE_HBAR).via("createSender"),
+                cryptoCreate(receiver).balance(0L),
+                // create a failing scheduled transaction (transfer more than the balance)
+                scheduleCreate(schedule, cryptoTransfer(tinyBarsFromTo(sender, receiver, 10L)))
+                        .waitForExpiry(true)
+                        .withRelativeExpiry("createSender", 4)
+                        .signedByPayerAnd(sender)
+                        .via("scheduleCreate"),
+                sleepFor(8_000),
+                // trigger with failing batch
+                atomicBatch(cryptoTransfer(tinyBarsFromTo(sender, receiver, ONE_HUNDRED_HBARS))
+                                .batchKey(batchOperator))
+                        .signedByPayerAnd(batchOperator)
+                        .hasKnownStatus(INNER_TRANSACTION_FAILED),
+                // validate the result of the schedule
+                getAccountBalance(receiver).hasTinyBars(10L));
     }
 
     private SpecOperation[] uploadTestContracts(String... contracts) {
@@ -1819,17 +1877,21 @@ public class RepeatableHip423Tests {
         });
     }
 
+    @SuppressWarnings("rawtypes,unchecked")
     private static SpecOperation purgeExpiringWithin(final long seconds) {
         return doingContextual(spec -> {
             final var lastExpiry = spec.consensusTime().getEpochSecond() + seconds;
             allRunFor(spec, sleepFor(seconds * 1_000L));
-            final WritableKVState<TimestampSeconds, ScheduledCounts> counts = spec.embeddedStateOrThrow()
-                    .getWritableStates(ScheduleService.NAME)
-                    .get(SCHEDULED_COUNTS_KEY);
-            final int numEarlier =
-                    (int) StreamSupport.stream(spliteratorUnknownSize(counts.keys(), DISTINCT | NONNULL), false)
-                            .filter(k -> k.seconds() <= lastExpiry)
-                            .count();
+            final MapWritableKVState<TimestampSeconds, ScheduledCounts> counts =
+                    (MapWritableKVState) spec.embeddedStateOrThrow()
+                            .getWritableStates(ScheduleService.NAME)
+                            .get(SCHEDULED_COUNTS_KEY);
+            final int numEarlier = (int) StreamSupport.stream(
+                            spliteratorUnknownSize(
+                                    counts.getBackingStore().keySet().iterator(), DISTINCT | NONNULL),
+                            false)
+                    .filter(k -> k.seconds() <= lastExpiry)
+                    .count();
             final var expectedSize = (int) counts.size() - numEarlier;
             for (int i = 0; i < numEarlier; i++) {
                 allRunFor(spec, cryptoTransfer(tinyBarsFromTo(DEFAULT_PAYER, FUNDING, 1L)));

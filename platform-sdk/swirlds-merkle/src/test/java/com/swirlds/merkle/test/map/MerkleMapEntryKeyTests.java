@@ -7,19 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.constructable.ConstructableRegistryException;
-import com.swirlds.common.crypto.Cryptography;
-import com.swirlds.common.crypto.CryptographyFactory;
 import com.swirlds.common.io.streams.MerkleDataInputStream;
 import com.swirlds.common.io.streams.MerkleDataOutputStream;
 import com.swirlds.common.merkle.utility.SerializableLong;
-import com.swirlds.common.test.fixtures.junit.tags.TestComponentTags;
 import com.swirlds.merkle.map.internal.MerkleMapEntryKey;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.constructable.ConstructableRegistryException;
+import org.hiero.base.crypto.Cryptography;
+import org.hiero.base.crypto.CryptographyProvider;
+import org.hiero.base.utility.test.fixtures.tags.TestComponentTags;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -65,7 +65,7 @@ class MerkleMapEntryKeyTests {
     @Tag(TestComponentTags.MMAP)
     @DisplayName("Equals and Hash Test")
     void equalsAndHashTest() {
-        final Cryptography cryptography = CryptographyFactory.create();
+        final Cryptography cryptography = CryptographyProvider.getInstance();
         final MerkleMapEntryKey<SerializableLong> key1 = new MerkleMapEntryKey<>(new SerializableLong(1));
         final MerkleMapEntryKey<SerializableLong> key2 = new MerkleMapEntryKey<>(new SerializableLong(1));
         final MerkleMapEntryKey<SerializableLong> key3 = new MerkleMapEntryKey<>(new SerializableLong(2));
@@ -112,6 +112,7 @@ class MerkleMapEntryKeyTests {
         final ConstructableRegistry registry = ConstructableRegistry.getInstance();
         registry.registerConstructables("com.swirlds.merkle.map");
         registry.registerConstructables("com.swirlds.common");
+        registry.registerConstructables("org.hiero");
 
         final MerkleMapEntryKey<SerializableLong> key = new MerkleMapEntryKey<>(new SerializableLong(1));
 

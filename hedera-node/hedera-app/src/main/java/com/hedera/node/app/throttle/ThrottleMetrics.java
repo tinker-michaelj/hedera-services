@@ -5,7 +5,7 @@ import static java.util.Objects.requireNonNull;
 
 import com.hedera.node.app.hapi.utils.throttles.CongestibleThrottle;
 import com.hedera.node.app.hapi.utils.throttles.DeterministicThrottle;
-import com.hedera.node.app.hapi.utils.throttles.GasLimitDeterministicThrottle;
+import com.hedera.node.app.hapi.utils.throttles.LeakyBucketDeterministicThrottle;
 import com.hedera.node.app.throttle.ThrottleAccumulator.ThrottleType;
 import com.hedera.node.config.data.StatsConfig;
 import com.swirlds.config.api.Configuration;
@@ -27,6 +27,8 @@ public class ThrottleMetrics {
     private static final Logger log = LogManager.getLogger(ThrottleMetrics.class);
 
     private static final String GAS_THROTTLE_ID = "<GAS>";
+    private static final String BYTES_THROTTLE_ID = "<GAS>";
+    private static final String OPS_DURATION_ID = "<OPS_DURATION>";
 
     private final Metrics metrics;
     private final String nameTemplate;
@@ -34,6 +36,7 @@ public class ThrottleMetrics {
     private final Function<StatsConfig, List<String>> throttlesToSampleSupplier;
     private List<MetricPair> liveMetricPairs = List.of();
     private MetricPair gasThrottleMetricPair;
+    private MetricPair opsDurationThrottleMetricPair;
 
     /**
      * Constructs a {@link ThrottleMetrics} instance.
@@ -81,11 +84,35 @@ public class ThrottleMetrics {
      * @param configuration the configuration that specifies which throttles should be monitored
      */
     public void setupGasThrottleMetric(
-            @NonNull final GasLimitDeterministicThrottle gasThrottle, @NonNull final Configuration configuration) {
+            @NonNull final LeakyBucketDeterministicThrottle gasThrottle, @NonNull final Configuration configuration) {
         final var statsConfig = configuration.getConfigData(StatsConfig.class);
         final var throttlesToSample = throttlesToSampleSupplier.apply(statsConfig);
 
         gasThrottleMetricPair = throttlesToSample.contains(GAS_THROTTLE_ID) ? setupLiveMetricPair(gasThrottle) : null;
+    }
+
+    /**
+     * Sets up the bytes throttle metric.
+     *
+     * @param bytesThrottle the bytes throttle to set up the metric for
+     * @param configuration the configuration that specifies which throttles should be monitored
+     */
+    public void setupBytesThrottleMetric(
+            @NonNull final LeakyBucketDeterministicThrottle bytesThrottle, @NonNull final Configuration configuration) {
+        final var statsConfig = configuration.getConfigData(StatsConfig.class);
+        final var throttlesToSample = throttlesToSampleSupplier.apply(statsConfig);
+
+        gasThrottleMetricPair =
+                throttlesToSample.contains(BYTES_THROTTLE_ID) ? setupLiveMetricPair(bytesThrottle) : null;
+    }
+
+    public void setupOpsDurationMetric(
+            @NonNull final LeakyBucketDeterministicThrottle opsDurationThrottle,
+            @NonNull final Configuration configuration) {
+        final var statsConfig = configuration.getConfigData(StatsConfig.class);
+        final var throttlesToSample = throttlesToSampleSupplier.apply(statsConfig);
+        opsDurationThrottleMetricPair =
+                throttlesToSample.contains(OPS_DURATION_ID) ? setupLiveMetricPair(opsDurationThrottle) : null;
     }
 
     /**
@@ -97,6 +124,11 @@ public class ThrottleMetrics {
         }
         if (gasThrottleMetricPair != null) {
             gasThrottleMetricPair.gauge().set(gasThrottleMetricPair.throttle().instantaneousPercentUsed());
+        }
+        if (opsDurationThrottleMetricPair != null) {
+            opsDurationThrottleMetricPair
+                    .gauge()
+                    .set(opsDurationThrottleMetricPair.throttle().instantaneousPercentUsed());
         }
     }
 

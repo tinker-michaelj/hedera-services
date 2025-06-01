@@ -22,6 +22,7 @@ import com.hedera.hapi.node.transaction.AssessedCustomFee;
 import com.hedera.hapi.node.transaction.ExchangeRateSet;
 import com.hedera.hapi.node.transaction.PendingAirdropRecord;
 import com.hedera.hapi.node.transaction.TransactionBody;
+import com.hedera.hapi.platform.event.TransactionGroupRole;
 import com.hedera.hapi.streams.ContractActions;
 import com.hedera.hapi.streams.ContractBytecode;
 import com.hedera.hapi.streams.ContractStateChanges;
@@ -122,6 +123,11 @@ public class PairedStreamBuilder
     }
 
     @Override
+    public void setTransactionGroupRole(@NonNull final TransactionGroupRole role) {
+        blockStreamBuilder.setTransactionGroupRole(role);
+    }
+
+    @Override
     public @NonNull PairedStreamBuilder transaction(@NonNull final Transaction transaction) {
         recordStreamBuilder.transaction(transaction);
         blockStreamBuilder.transaction(transaction);
@@ -182,6 +188,11 @@ public class PairedStreamBuilder
     @Override
     public long getGasUsedForContractTxn() {
         return recordStreamBuilder.getGasUsedForContractTxn();
+    }
+
+    @Override
+    public long getOpsDurationForContractTxn() {
+        return recordStreamBuilder.getOpsDurationForContractTxn();
     }
 
     @NonNull
@@ -387,6 +398,13 @@ public class PairedStreamBuilder
             @NonNull ContractStateChanges contractStateChanges, boolean isMigration) {
         recordStreamBuilder.addContractStateChanges(contractStateChanges, isMigration);
         blockStreamBuilder.addContractStateChanges(contractStateChanges, isMigration);
+        return this;
+    }
+
+    @Override
+    public ContractOperationStreamBuilder opsDuration(long opsDuration) {
+        recordStreamBuilder.opsDuration(opsDuration);
+        blockStreamBuilder.opsDuration(opsDuration);
         return this;
     }
 

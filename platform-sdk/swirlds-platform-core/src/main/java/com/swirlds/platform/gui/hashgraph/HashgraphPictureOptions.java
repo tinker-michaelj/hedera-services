@@ -21,6 +21,16 @@ public interface HashgraphPictureOptions {
     boolean writeRoundCreated();
 
     /**
+     * @return should the vote be written
+     */
+    boolean writeVote();
+
+    /**
+     * @return should the event hash be written for every event
+     */
+    boolean writeEventHash();
+
+    /**
      * @return should round received be written for every event
      */
     boolean writeRoundReceived();
@@ -44,6 +54,16 @@ public interface HashgraphPictureOptions {
      * @return should the birth round be written for every event
      */
     boolean writeBirthRound();
+
+    /**
+     * @return should branch numbers be written for every branched event (if any)
+     */
+    boolean writeBranches();
+
+    /**
+     * @return should the DeGen be written for every event
+     */
+    boolean writeDeGen();
 
     /**
      * @return should simple colors be used in the picture

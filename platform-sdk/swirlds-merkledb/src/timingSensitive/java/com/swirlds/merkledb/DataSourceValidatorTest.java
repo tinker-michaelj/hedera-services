@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.merkledb;
 
-import static com.swirlds.common.test.fixtures.AssertionUtils.assertEventuallyEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.swirlds.merkledb.test.fixtures.MerkleDbTestUtils;
 import com.swirlds.merkledb.test.fixtures.TestType;
 import com.swirlds.virtualmap.serialize.KeySerializer;
 import com.swirlds.virtualmap.serialize.ValueSerializer;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,9 +26,7 @@ class DataSourceValidatorTest {
     @BeforeEach
     public void setUp() {
         count = 10_000;
-        // check db count
-        assertEventuallyEquals(
-                0L, MerkleDbDataSource::getCountOfOpenDatabases, Duration.ofSeconds(1), "Expected no open dbs");
+        MerkleDbTestUtils.assertAllDatabasesClosed();
     }
 
     @Test
@@ -39,19 +36,15 @@ class DataSourceValidatorTest {
         MerkleDbDataSourceTest.createAndApplyDataSource(
                 tempDir, "createAndCheckInternalNodeHashes", TestType.fixed_fixed, count, 0, dataSource -> {
                     // check db count
-                    assertEventuallyEquals(
-                            1L,
-                            MerkleDbDataSource::getCountOfOpenDatabases,
-                            Duration.ofSeconds(1),
-                            "Expected only 1 db");
+                    MerkleDbTestUtils.assertSomeDatabasesStillOpen(1L);
 
                     final var validator = new DataSourceValidator<>(keySerializer, valueSerializer, dataSource);
                     // create some node hashes
                     dataSource.saveRecords(
-                            count,
-                            count * 2L,
-                            IntStream.range(0, count).mapToObj(MerkleDbDataSourceTest::createVirtualInternalRecord),
-                            IntStream.range(count, count * 2 + 1)
+                            count - 1,
+                            count * 2L - 2,
+                            IntStream.range(0, count - 1).mapToObj(MerkleDbDataSourceTest::createVirtualInternalRecord),
+                            IntStream.range(count - 1, count * 2 - 1)
                                     .mapToObj(
                                             i -> TestType.fixed_fixed.dataType().createVirtualLeafRecord(i))
                                     .map(r -> r.toBytes(keySerializer, valueSerializer)),
@@ -68,17 +61,13 @@ class DataSourceValidatorTest {
         MerkleDbDataSourceTest.createAndApplyDataSource(
                 tempDir, "createAndCheckInternalNodeHashes", TestType.fixed_fixed, count, 0, dataSource -> {
                     // check db count
-                    assertEventuallyEquals(
-                            1L,
-                            MerkleDbDataSource::getCountOfOpenDatabases,
-                            Duration.ofSeconds(1),
-                            "Expected only 1 db");
+                    MerkleDbTestUtils.assertSomeDatabasesStillOpen(1L);
                     final var validator = new DataSourceValidator<>(keySerializer, valueSerializer, dataSource);
                     // create some node hashes
                     dataSource.saveRecords(
-                            count,
-                            count * 2L,
-                            IntStream.range(0, count).mapToObj(MerkleDbDataSourceTest::createVirtualInternalRecord),
+                            count - 1,
+                            count * 2L - 2,
+                            IntStream.range(0, count - 1).mapToObj(MerkleDbDataSourceTest::createVirtualInternalRecord),
                             // leaves are missing
                             Stream.empty(),
                             Stream.empty());

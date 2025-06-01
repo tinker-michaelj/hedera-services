@@ -35,6 +35,7 @@ public class FrameUtils {
     public static final String PROPAGATED_CALL_FAILURE_CONTEXT_VARIABLE = "propagatedCallFailure";
     public static final String SYSTEM_CONTRACT_GAS_CALCULATOR_CONTEXT_VARIABLE = "systemContractGasCalculator";
     public static final String PENDING_CREATION_BUILDER_CONTEXT_VARIABLE = "pendingCreationBuilder";
+    public static final String HEDERA_OPS_DURATION = "hederaOpsDuration";
 
     public enum EntityType {
         TOKEN,
@@ -375,5 +376,29 @@ public class FrameUtils {
      */
     public static EntityIdFactory entityIdFactory(@NonNull final MessageFrame frame) {
         return proxyUpdaterFor(frame).entityIdFactory();
+    }
+
+    /**
+     * Increments the Hedera ops duration in the top level frame by the given amount.
+     *
+     * @param frame the current frame
+     * @param opsDuration the amount ops duration to increment by
+     */
+    public static void incrementOpsDuration(@NonNull final MessageFrame frame, final long opsDuration) {
+        final HederaOpsDurationCounter opsDurationCounter =
+                initialFrameOf(frame).getContextVariable(HEDERA_OPS_DURATION);
+        opsDurationCounter.incrementOpsDuration(opsDuration);
+    }
+
+    /**
+     * Returns the Hedera ops duration usage in the top level frame.
+     *
+     * @param frame the current frame
+     * @return the total Hedera ops duration
+     */
+    public static long getHederaOpsDuration(@NonNull final MessageFrame frame) {
+        final HederaOpsDurationCounter opsDurationCounter =
+                initialFrameOf(frame).getContextVariable(HEDERA_OPS_DURATION);
+        return opsDurationCounter.getOpsDurationCounter();
     }
 }

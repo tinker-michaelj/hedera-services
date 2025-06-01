@@ -3,6 +3,7 @@ package com.hedera.services.bdd.spec;
 
 import static com.hedera.node.app.hapi.utils.CommonPbjConverters.fromPbj;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getTxnRecord;
+import static com.hedera.services.bdd.spec.transactions.TxnUtils.asId;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.asIdWithAlias;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.extractTxnId;
 import static java.util.Collections.EMPTY_LIST;
@@ -22,7 +23,6 @@ import com.hedera.node.app.hapi.utils.fee.FileFeeBuilder;
 import com.hedera.node.app.hapi.utils.fee.SmartContractFeeBuilder;
 import com.hedera.services.bdd.junit.hedera.HederaNetwork;
 import com.hedera.services.bdd.junit.hedera.HederaNode;
-import com.hedera.services.bdd.spec.HapiSpecSetup.TxnProtoStructure;
 import com.hedera.services.bdd.spec.keys.ControlForKey;
 import com.hedera.services.bdd.spec.keys.SigControl;
 import com.hedera.services.bdd.spec.keys.SigMapGenerator;
@@ -124,7 +124,7 @@ public abstract class HapiSpecOperation implements SpecOperation {
     protected Optional<String> metadata = Optional.empty();
     protected Optional<String> payer = Optional.empty();
     protected Optional<Boolean> genRecord = Optional.empty();
-    protected Optional<AccountID> node = Optional.empty();
+    protected Optional<String> node = Optional.empty();
     protected Optional<Supplier<AccountID>> nodeSupplier = Optional.empty();
     protected OptionalDouble usdFee = OptionalDouble.empty();
     protected Optional<Integer> retryLimits = Optional.empty();
@@ -169,8 +169,7 @@ public abstract class HapiSpecOperation implements SpecOperation {
     }
 
     protected AccountID targetNodeFor(final HapiSpec spec) {
-        fixNodeFor(spec);
-        return node.get();
+        return fixNodeFor(spec);
     }
 
     protected void configureTlsFor(final HapiSpec spec) {
@@ -183,17 +182,17 @@ public abstract class HapiSpecOperation implements SpecOperation {
                 : spec.setup().txnProtoStructure();
     }
 
-    protected void fixNodeFor(final HapiSpec spec) {
+    protected AccountID fixNodeFor(final HapiSpec spec) {
         if (node.isPresent()) {
-            return;
+            return asId(node.get(), spec);
         }
         if (nodeSupplier.isPresent()) {
-            node = Optional.of(nodeSupplier.get().get());
+            return nodeSupplier.get().get();
         } else {
             if (spec.setup().nodeSelector() == HapiSpecSetup.NodeSelection.RANDOM) {
-                node = Optional.of(randomNodeFrom(spec));
+                return randomNodeFrom(spec);
             } else {
-                node = Optional.of(spec.setup().defaultNode());
+                return spec.setup().defaultNode();
             }
         }
     }
@@ -273,7 +272,7 @@ public abstract class HapiSpecOperation implements SpecOperation {
             if (omitNodeAccount) {
                 builder.clearNodeAccountID();
             } else {
-                node.ifPresent(builder::setNodeAccountID);
+                node.ifPresent((s) -> builder.setNodeAccountID(fixNodeFor(spec)));
             }
             validDurationSecs.ifPresent(s -> builder.setTransactionValidDuration(
                     Duration.newBuilder().setSeconds(s).build()));
@@ -347,15 +346,8 @@ public abstract class HapiSpecOperation implements SpecOperation {
             return txnWithBodyBytesAndSigMap;
         }
         ByteString bodyByteString = CommonUtils.extractTransactionBodyByteString(txnWithBodyBytesAndSigMap);
-        final TransactionBody txBody = TransactionBody.parseFrom(bodyByteString);
-        if (explicitProtoStructure == TxnProtoStructure.NORMALIZED) {
-            return txnWithBodyBytesAndSigMap.toBuilder()
-                    .clearBodyBytes()
-                    .setBody(txBody)
-                    .build();
-        }
         if (unknownFieldLocation == UnknownFieldLocation.TRANSACTION_BODY) {
-            bodyByteString = txBody.toBuilder()
+            bodyByteString = TransactionBody.parseFrom(bodyByteString).toBuilder()
                     .setUnknownFields(nonEmptyUnknownFields())
                     .build()
                     .toByteString();
@@ -457,7 +449,7 @@ public abstract class HapiSpecOperation implements SpecOperation {
             helper.add("sigs", FeeBuilder.getSignatureCount(txnSubmitted));
         }
         payer.ifPresent(a -> helper.add("payer", a));
-        node.ifPresent(id -> helper.add("node", HapiPropertySource.asAccountString(id)));
+        node.ifPresent(id -> helper.add("node", id));
         return helper;
     }
 

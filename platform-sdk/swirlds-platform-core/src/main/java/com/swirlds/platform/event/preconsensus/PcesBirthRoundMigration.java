@@ -3,23 +3,19 @@ package com.swirlds.platform.event.preconsensus;
 
 import static com.swirlds.logging.legacy.LogMarker.EXCEPTION;
 import static com.swirlds.logging.legacy.LogMarker.STARTUP;
-import static com.swirlds.platform.event.AncientMode.BIRTH_ROUND_THRESHOLD;
-import static com.swirlds.platform.event.AncientMode.GENERATION_THRESHOLD;
 import static com.swirlds.platform.event.preconsensus.PcesUtilities.getDatabaseDirectory;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.util.Objects.requireNonNull;
+import static org.hiero.consensus.model.event.AncientMode.BIRTH_ROUND_THRESHOLD;
+import static org.hiero.consensus.model.event.AncientMode.GENERATION_THRESHOLD;
 
 import com.hedera.hapi.platform.event.GossipEvent;
 import com.swirlds.common.context.PlatformContext;
 import com.swirlds.common.io.IOIterator;
-import com.swirlds.common.io.streams.SerializableDataOutputStream;
 import com.swirlds.common.io.utility.FileUtils;
 import com.swirlds.common.io.utility.LegacyTemporaryFileBuilder;
 import com.swirlds.common.io.utility.RecycleBin;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.config.api.Configuration;
-import com.swirlds.platform.event.AncientMode;
-import com.swirlds.platform.event.PlatformEvent;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -34,6 +30,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.io.streams.SerializableDataOutputStream;
+import org.hiero.consensus.model.event.AncientMode;
+import org.hiero.consensus.model.event.PlatformEvent;
+import org.hiero.consensus.model.node.NodeId;
 
 /**
  * This class is capable of migrating a PCES in generation mode to a PCES in birth round mode.
@@ -53,8 +53,9 @@ public final class PcesBirthRoundMigration {
      * @param migrationRound                         the round at which the migration is occurring, this will be equal
      *                                               to the round number of the initial state
      * @param minimumJudgeGenerationInMigrationRound the minimum judge generation in the migration round
+     * @return true if any events were migrated to support birth rounds, else false
      */
-    public static void migratePcesToBirthRoundMode(
+    public static boolean migratePcesToBirthRoundMode(
             @NonNull final PlatformContext platformContext,
             @NonNull final NodeId selfId,
             final long migrationRound,
@@ -69,7 +70,7 @@ public final class PcesBirthRoundMigration {
             // No migration needed if there are no PCES files in generation mode.
 
             logger.info(STARTUP.getMarker(), "PCES birth round migration is not necessary.");
-            return;
+            return false;
         } else if (!findPcesFiles(databaseDirectory, BIRTH_ROUND_THRESHOLD).isEmpty()) {
             // We've found PCES files in both birth round and generation mode.
             // This is a signal that we attempted to do the migration but crashed.
@@ -84,7 +85,7 @@ public final class PcesBirthRoundMigration {
             makeBackupFiles(platformContext.getRecycleBin(), databaseDirectory, platformContext.getConfiguration());
             cleanUpOldFiles(databaseDirectory);
 
-            return;
+            return true;
         }
 
         logger.info(
@@ -101,7 +102,7 @@ public final class PcesBirthRoundMigration {
 
         if (eventsToMigrate.isEmpty()) {
             logger.error(EXCEPTION.getMarker(), "No events to migrate. PCES birth round migration aborted.");
-            return;
+            return false;
         }
 
         migrateEvents(platformContext, selfId, eventsToMigrate, migrationRound);
@@ -109,6 +110,7 @@ public final class PcesBirthRoundMigration {
         cleanUpOldFiles(databaseDirectory);
 
         logger.info(STARTUP.getMarker(), "PCES birth round migration complete.");
+        return true;
     }
 
     /**

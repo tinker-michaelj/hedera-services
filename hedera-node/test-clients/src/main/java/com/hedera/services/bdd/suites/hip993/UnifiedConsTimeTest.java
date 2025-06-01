@@ -67,7 +67,7 @@ public class UnifiedConsTimeTest {
         return hapiTest(
                 cryptoTransfer(tinyBarsFromTo(GENESIS, FUNDING, ONE_HBAR))
                         .memo("From a better time")
-                        .setNode("0.0.4")
+                        .setNode(4)
                         .withSubmissionStrategy(usingVersion(SyntheticVersion.PAST))
                         .via("preUpgrade")
                         .hasAnyStatusAtAll(),

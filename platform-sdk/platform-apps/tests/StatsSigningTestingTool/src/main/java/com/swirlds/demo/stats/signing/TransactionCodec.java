@@ -2,14 +2,14 @@
 package com.swirlds.demo.stats.signing;
 
 import com.hedera.pbj.runtime.io.buffer.Bytes;
-import com.swirlds.common.crypto.SignatureType;
-import com.swirlds.common.crypto.TransactionSignature;
 import com.swirlds.demo.stats.signing.algorithms.ECSecP256K1Algorithm;
 import com.swirlds.demo.stats.signing.algorithms.SigningAlgorithm;
 import com.swirlds.demo.stats.signing.algorithms.X25519SigningAlgorithm;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import org.hiero.base.crypto.SignatureType;
+import org.hiero.base.crypto.TransactionSignature;
 
 /**
  * The core transaction encoder and decoder implementation. See below for the binary transaction format specification.
@@ -158,7 +158,11 @@ final class TransactionCodec {
         final int dataLen = wrapper.getInt();
         final int dataOffset = wrapper.position();
 
-        return new TransactionSignature(tx, sigOffset, sigLen, pkOffset, pkLen, dataOffset, dataLen, signatureType);
+        return new TransactionSignature(
+                Bytes.wrap(tx, dataOffset, dataLen),
+                Bytes.wrap(tx, pkOffset, pkLen),
+                Bytes.wrap(tx, sigOffset, sigLen),
+                signatureType);
     }
 
     private static TransactionSignature readEcdsaSignature(
@@ -179,7 +183,6 @@ final class TransactionCodec {
         final ByteBuffer sigPayload = ByteBuffer.allocate(pkLen + sigLen + dataHash.length);
         sigPayload.put(pk).put(sig).put(dataHash);
 
-        return new TransactionSignature(
-                sigPayload.array(), pkLen, sigLen, 0, pkLen, pkLen + sigLen, dataHash.length, signatureType);
+        return new TransactionSignature(Bytes.wrap(dataHash), Bytes.wrap(pk), Bytes.wrap(sig), signatureType);
     }
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.service.contract.impl.utils;
 
+import static com.esaulpaugh.headlong.abi.Address.toChecksumAddress;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS;
 import static com.hedera.node.app.service.contract.impl.exec.scope.HederaNativeOperations.MISSING_ENTITY_NUMBER;
 import static com.hedera.node.app.service.contract.impl.exec.scope.HederaNativeOperations.NON_CANONICAL_REFERENCE_NUMBER;
@@ -9,9 +10,9 @@ import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.en
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.proxyUpdaterFor;
 import static com.hedera.node.app.service.contract.impl.utils.SynthTxnUtils.hasNonDegenerateAutoRenewAccountId;
 import static com.hedera.node.app.service.token.AliasUtils.extractEvmAddress;
-import static com.swirlds.common.utility.CommonUtils.unhex;
 import static java.lang.System.arraycopy;
 import static java.util.Objects.requireNonNull;
+import static org.hiero.base.utility.CommonUtils.unhex;
 
 import com.esaulpaugh.headlong.abi.Tuple;
 import com.google.common.primitives.Ints;
@@ -20,7 +21,6 @@ import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.ContractID;
 import com.hedera.hapi.node.base.Duration;
 import com.hedera.hapi.node.base.Key;
-import com.hedera.hapi.node.base.ResponseCodeEnum;
 import com.hedera.hapi.node.base.ScheduleID;
 import com.hedera.hapi.node.base.TokenID;
 import com.hedera.hapi.node.contract.ContractCreateTransactionBody;
@@ -30,11 +30,15 @@ import com.hedera.hapi.node.transaction.ExchangeRate;
 import com.hedera.hapi.streams.ContractStateChange;
 import com.hedera.hapi.streams.ContractStateChanges;
 import com.hedera.hapi.streams.StorageChange;
+import com.hedera.node.app.service.contract.impl.exec.CallOutcome;
 import com.hedera.node.app.service.contract.impl.exec.scope.HandleHederaNativeOperations;
 import com.hedera.node.app.service.contract.impl.exec.scope.HederaNativeOperations;
+import com.hedera.node.app.service.contract.impl.exec.scope.HederaOperations;
+import com.hedera.node.app.service.contract.impl.records.ContractCallStreamBuilder;
 import com.hedera.node.app.service.contract.impl.state.StorageAccesses;
 import com.hedera.node.app.service.token.ReadableAccountStore;
 import com.hedera.node.app.spi.workflows.HandleException;
+import com.hedera.node.config.data.HederaConfig;
 import com.swirlds.state.lifecycle.EntityIdFactory;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -111,7 +115,7 @@ public class ConversionUtils {
     public static TokenID asTokenId(@NonNull final com.esaulpaugh.headlong.abi.Address address) {
         final var explicit = explicitFromHeadlong(address);
         return TokenID.newBuilder()
-                .shardNum(realmOfLongZero(explicit))
+                .shardNum(shardOfLongZero(explicit))
                 .realmNum(realmOfLongZero(explicit))
                 .tokenNum(numberOfLongZero(explicit))
                 .build();
@@ -191,8 +195,8 @@ public class ConversionUtils {
     /**
      * Given a {@link TokenID}, returns its address as a headlong address.
      *
-     * @param tokenId
-     * @return
+     * @param tokenId the Token Id
+     * @return the headlong address
      */
     public static com.esaulpaugh.headlong.abi.Address headlongAddressOf(@NonNull final TokenID tokenId) {
         requireNonNull(tokenId);
@@ -254,8 +258,7 @@ public class ConversionUtils {
     public static com.esaulpaugh.headlong.abi.Address asHeadlongAddress(@NonNull final byte[] explicit) {
         requireNonNull(explicit);
         final var integralAddress = Bytes.wrap(explicit).toUnsignedBigInteger();
-        return com.esaulpaugh.headlong.abi.Address.wrap(
-                com.esaulpaugh.headlong.abi.Address.toChecksumAddress(integralAddress));
+        return com.esaulpaugh.headlong.abi.Address.wrap(toChecksumAddress(integralAddress));
     }
 
     /**
@@ -275,7 +278,7 @@ public class ConversionUtils {
     }
 
     /**
-     * Wraps the first 32 bytes of the given SHA-384 {@link com.swirlds.common.crypto.Hash hash} in a Besu {@link Hash}.
+     * Wraps the first 32 bytes of the given SHA-384 {@link org.hiero.base.crypto.Hash hash} in a Besu {@link Hash}.
      *
      * @param sha384Hash the SHA-384 hash
      * @return the first 32 bytes as a Besu {@link Hash}
@@ -396,7 +399,8 @@ public class ConversionUtils {
         if (number == MISSING_ENTITY_NUMBER) {
             return MISSING_ENTITY_NUMBER;
         } else {
-            final var account = nativeOperations.getAccount(number);
+            final var account = nativeOperations.getAccount(
+                    nativeOperations.entityIdFactory().newAccountId(number));
             if (account == null) {
                 return MISSING_ENTITY_NUMBER;
             } else if (!Arrays.equals(explicit, explicitAddressOf(account))) {
@@ -428,9 +432,11 @@ public class ConversionUtils {
      */
     @SuppressWarnings("java:S2201")
     public static long numberOfLongZero(@NonNull final Address address) {
-        // check for negative long value and throws an exception if it is
-        address.toUnsignedBigInteger().longValueExact();
-        return numberOfLongZero(address.toArray());
+        final var longVal = numberOfLongZero(address.toArray());
+        if (longVal < 0) {
+            throw new ArithmeticException("Long zero address is negative");
+        }
+        return longVal;
     }
 
     /**
@@ -574,18 +580,46 @@ public class ConversionUtils {
         if (!isLongZero(entityIdFactory, address)) {
             throw new IllegalArgumentException("Cannot extract id number from address " + address);
         }
-        return entityIdFactory.newScheduleId(address.value().longValueExact());
+
+        // Get the last 16 characters of the address. We need only the schedule number skipping the shard and realm
+        var addressHex = toChecksumAddress(address.value());
+        var scheduleNum = addressHex.substring(26, 42);
+
+        return entityIdFactory.newScheduleId(new BigInteger(scheduleNum, 16).longValue());
     }
 
     /**
-     * Throws a {@link HandleException} if the given status is not {@link ResponseCodeEnum#SUCCESS}.
-     *
-     * @param status the status
+     * Throws a {@link HandleException} if the given outcome did not succeed for a call.
+     * @param outcome the outcome
+     * @param hederaOperations the Hedera operations
+     * @param streamBuilder the stream builder
      */
-    public static void throwIfUnsuccessful(@NonNull final ResponseCodeEnum status) {
-        if (status != SUCCESS) {
-            // We don't want to rollback the root updater here since it contains gas charges
-            throw new HandleException(status, HandleException.ShouldRollbackStack.NO);
+    public static void throwIfUnsuccessfulCall(
+            @NonNull final CallOutcome outcome,
+            @NonNull final HederaOperations hederaOperations,
+            @NonNull final ContractCallStreamBuilder streamBuilder) {
+        requireNonNull(outcome);
+        requireNonNull(hederaOperations);
+        requireNonNull(streamBuilder);
+        if (outcome.status() != SUCCESS) {
+            throw new HandleException(outcome.status(), feeChargingContext -> {
+                hederaOperations.replayGasChargingIn(feeChargingContext);
+                outcome.addCalledContractIfNotAborted(streamBuilder);
+            });
+        }
+    }
+
+    /**
+     * Throws a {@link HandleException} if the given outcome did not succeed for a call.
+     * @param outcome the outcome
+     * @param hederaOperations the Hedera operations
+     */
+    public static void throwIfUnsuccessfulCreate(
+            @NonNull final CallOutcome outcome, @NonNull final HederaOperations hederaOperations) {
+        requireNonNull(outcome);
+        requireNonNull(hederaOperations);
+        if (outcome.status() != SUCCESS) {
+            throw new HandleException(outcome.status(), hederaOperations::replayGasChargingIn);
         }
     }
 
@@ -745,12 +779,12 @@ public class ConversionUtils {
     }
 
     /**
-     * Given an explicit 20-byte addresss, returns its shard value.
+     * Given an explicit 20-byte addresss, returns its realm value.
      *
      * @param explicit the explicit 20-byte address
-     * @return its shard value
+     * @return its realm value
      */
-    public static long shardOfLongZero(@NonNull final byte[] explicit) {
+    public static long realmOfLongZero(@NonNull final byte[] explicit) {
         return longFrom(
                 explicit[4],
                 explicit[5],
@@ -763,12 +797,12 @@ public class ConversionUtils {
     }
 
     /**
-     * Given an explicit 20-byte addresss, returns its realm value.
+     * Given an explicit 20-byte addresss, returns its shard value.
      *
      * @param explicit the explicit 20-byte address
-     * @return its realm value
+     * @return its shard value
      */
-    public static long realmOfLongZero(@NonNull final byte[] explicit) {
+    public static int shardOfLongZero(@NonNull final byte[] explicit) {
         return longFrom(explicit[0], explicit[1], explicit[2], explicit[3]);
     }
 
@@ -793,8 +827,8 @@ public class ConversionUtils {
                 | (b8 & 0xFFL);
     }
 
-    private static long longFrom(final byte b1, final byte b2, final byte b3, final byte b4) {
-        return (b1 & 0xFFL) << 24 | (b2 & 0xFFL) << 16 | (b3 & 0xFFL) << 8 | (b4 & 0xFFL);
+    private static int longFrom(final byte b1, final byte b2, final byte b3, final byte b4) {
+        return (b1 & 0xFF) << 24 | (b2 & 0xFF) << 16 | (b3 & 0xFF) << 8 | (b4 & 0xFF);
     }
 
     private static com.hedera.pbj.runtime.io.buffer.Bytes bloomFor(@NonNull final Log log) {
@@ -824,9 +858,10 @@ public class ConversionUtils {
                     explicit[19]);
         } else {
             final var evmAddress = extractEvmAddress(com.hedera.pbj.runtime.io.buffer.Bytes.wrap(explicit));
+            final var config = nativeOperations.configuration().getConfigData(HederaConfig.class);
             return evmAddress == null
                     ? HederaNativeOperations.MISSING_ENTITY_NUMBER
-                    : nativeOperations.resolveAlias(evmAddress);
+                    : nativeOperations.resolveAlias(config.shard(), config.realm(), evmAddress);
         }
     }
 
@@ -899,18 +934,45 @@ public class ConversionUtils {
      * Given a {@link ContractID} return the corresponding Besu {@link Address}
      * Importantly, this method does NOT check for the existence of the contract in the ledger
      *
+     * @param entityIdFactory the entity id factory
      * @param contractId the contract id
      * @return the equivalent Besu address
      */
-    public static @NonNull Address contractIDToBesuAddress(final ContractID contractId) {
+    public static @NonNull Address contractIDToBesuAddress(
+            @NonNull final EntityIdFactory entityIdFactory, @NonNull final ContractID contractId) {
         if (contractId.hasEvmAddress()) {
             return pbjToBesuAddress(contractId.evmAddressOrThrow());
         } else {
             // OrElse(0) is needed, as an UNSET contract OneOf has null number
-            return asLongZeroAddress(AccountID.newBuilder()
-                    .accountNum(contractId.contractNumOrElse(0L))
-                    .build());
+            return asLongZeroAddress(entityIdFactory.newAccountId(contractId.contractNumOrElse(0L)));
         }
+    }
+
+    /**
+     * Given a {@link ContractID} return the corresponding Long entity id
+     * The id can be tokenId, scheduleId, etc. Depends on what user is sending in the 'contractID' field.
+     * <p>
+     * Returns 0 if contractId in a non-long zero evm address
+     *
+     * @param entityIdFactory the entity id factory
+     * @param contractId the contract id
+     * @return the equivalent entity id (0 if contractId in a non-long zero evm address)
+     */
+    public static @NonNull Long contractIDToNum(
+            @NonNull final EntityIdFactory entityIdFactory, final ContractID contractId) {
+        final Long id;
+        // For convenience also translate a long-zero address to a entity id
+        if (contractId.hasEvmAddress()) {
+            final var evmAddress = contractId.evmAddressOrThrow().toByteArray();
+            if (isLongZeroAddress(entityIdFactory, evmAddress)) {
+                id = numberOfLongZero(evmAddress);
+            } else {
+                id = 0L;
+            }
+        } else {
+            id = contractId.contractNumOrElse(0L);
+        }
+        return id;
     }
 
     /**

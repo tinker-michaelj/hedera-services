@@ -35,7 +35,7 @@ public class DataFileCollectionBench extends BaseBench {
         String storeName = "compactionBench";
         beforeTest(storeName);
 
-        final LongListOffHeap index = new LongListOffHeap();
+        final LongListOffHeap index = new LongListOffHeap(1024 * 1024, maxKey, 256 * 1024);
         final BenchmarkRecord[] map = new BenchmarkRecord[verify ? maxKey : 0];
         final MerkleDbConfig dbConfig = getConfig(MerkleDbConfig.class);
         final BenchmarkRecordSerializer serializer = new BenchmarkRecordSerializer();
@@ -46,6 +46,7 @@ public class DataFileCollectionBench extends BaseBench {
                         return recordData != null ? serializer.deserialize(recordData) : null;
                     }
                 };
+        store.updateValidKeyRange(0, maxKey);
         final var compactor = new DataFileCompactor(dbConfig, storeName, store, index, null, null, null, null);
         System.out.println();
 
@@ -60,7 +61,7 @@ public class DataFileCollectionBench extends BaseBench {
                 index.put(id, store.storeDataItem(record::serialize, BenchmarkRecord.getSerializedSize()));
                 if (verify) map[(int) id] = record;
             }
-            store.endWriting(0, maxKey).setFileCompleted();
+            store.endWriting();
         }
         System.out.println("Created " + numFiles + " files in " + (System.currentTimeMillis() - start) + "ms");
 

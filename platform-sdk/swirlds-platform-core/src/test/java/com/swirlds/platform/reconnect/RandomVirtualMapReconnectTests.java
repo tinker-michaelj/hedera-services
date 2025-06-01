@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.platform.reconnect;
 
-import static com.swirlds.common.test.fixtures.RandomUtils.getRandomPrintSeed;
 import static com.swirlds.platform.test.fixtures.config.ConfigUtils.CONFIGURATION;
+import static org.hiero.base.utility.test.fixtures.RandomUtils.getRandomPrintSeed;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -11,7 +11,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.swirlds.common.crypto.DigestType;
 import com.swirlds.common.io.utility.LegacyTemporaryFileBuilder;
 import com.swirlds.common.merkle.MerkleInternal;
 import com.swirlds.common.metrics.config.MetricsConfig;
@@ -45,6 +44,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Stream;
+import org.hiero.base.crypto.DigestType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -67,10 +67,7 @@ class RandomVirtualMapReconnectTests extends VirtualMapReconnectTestBase {
         MerkleDb.setDefaultPath(defaultVirtualMapPath);
         final MerkleDbConfig merkleDbConfig = CONFIGURATION.getConfigData(MerkleDbConfig.class);
         final MerkleDbTableConfig tableConfig = new MerkleDbTableConfig(
-                (short) 1,
-                DigestType.SHA_384,
-                merkleDbConfig.maxNumOfKeys(),
-                merkleDbConfig.hashesRamToDiskThreshold());
+                (short) 1, DigestType.SHA_384, 1_000_000, merkleDbConfig.hashesRamToDiskThreshold());
         return new MerkleDbDataSourceBuilder(tableConfig, CONFIGURATION);
     }
 
@@ -110,7 +107,7 @@ class RandomVirtualMapReconnectTests extends VirtualMapReconnectTestBase {
      * @param initialMapSize
      * 		how many key/values to store in both teacherMap and learnerMap before the reconnect
      * @param maximumKey
-     * 		how many distict Key values are allowed to exist
+     * 		how many distinct Key values are allowed to exist
      * @param operations
      * 		how many create/update/delete operations to perform on just the teacherMap, prior to the
      * 		reconnect
@@ -269,7 +266,11 @@ class RandomVirtualMapReconnectTests extends VirtualMapReconnectTestBase {
             copiesQueue.remove().release();
         }
 
-        afterSyncLearnerTree.release();
+        if (afterSyncLearnerTree != null) {
+            afterSyncLearnerTree.release();
+        } else {
+            afterMap.release();
+        }
         copy.release();
         teacherTree.release();
         learnerTree.release();
@@ -352,5 +353,6 @@ class RandomVirtualMapReconnectTests extends VirtualMapReconnectTestBase {
         afterCopy.release();
         teacherTree.release();
         learnerTree.release();
+        afterLearnerMap.release();
     }
 }

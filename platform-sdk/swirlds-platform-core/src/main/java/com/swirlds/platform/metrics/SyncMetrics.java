@@ -11,7 +11,6 @@ import com.swirlds.base.units.UnitConstants;
 import com.swirlds.common.metrics.RunningAverageMetric;
 import com.swirlds.common.metrics.extensions.CountPerSecond;
 import com.swirlds.metrics.api.Metrics;
-import com.swirlds.platform.consensus.EventWindow;
 import com.swirlds.platform.gossip.shadowgraph.ShadowgraphSynchronizer;
 import com.swirlds.platform.gossip.shadowgraph.SyncResult;
 import com.swirlds.platform.gossip.shadowgraph.SyncTiming;
@@ -24,6 +23,7 @@ import com.swirlds.platform.stats.MaxStat;
 import com.swirlds.platform.system.PlatformStatNames;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.time.temporal.ChronoUnit;
+import org.hiero.consensus.model.hashgraph.EventWindow;
 
 /**
  * Interface to update relevant sync statistics
@@ -243,7 +243,7 @@ public class SyncMetrics {
      * @param other event window of their graph at the start of the sync
      */
     public void eventWindow(@NonNull final EventWindow self, @NonNull final EventWindow other) {
-        syncIndicatorDiff.update(self.getAncientThreshold() - other.getAncientThreshold());
+        syncIndicatorDiff.update(self.ancientThreshold() - other.ancientThreshold());
     }
 
     /**

@@ -9,27 +9,29 @@ import static com.hedera.node.app.service.contract.impl.exec.failure.CustomExcep
 import static com.hedera.node.app.service.contract.impl.exec.systemcontracts.hts.create.CreateCommons.createMethodsSet;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.acquiredSenderAuthorizationViaDelegateCall;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.alreadyHalted;
-import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.entityIdFactory;
+import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.incrementOpsDuration;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.isPrecompileEnabled;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.isTopLevelTransaction;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.proxyUpdaterFor;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.recordBuilderFor;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.setPropagatedCallFailure;
 import static com.hedera.node.app.service.contract.impl.exec.utils.FrameUtils.transfersValue;
+import static com.hedera.node.app.service.contract.impl.hevm.HederaOpsDuration.MULTIPLIER_FACTOR;
 import static com.hedera.node.app.service.contract.impl.hevm.HevmPropagatedCallFailure.MISSING_RECEIVER_SIGNATURE;
 import static com.hedera.node.app.service.contract.impl.hevm.HevmPropagatedCallFailure.RESULT_CANNOT_BE_EXTERNALIZED;
-import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.asNumberedContractId;
+import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.numberOfLongZero;
 import static org.hyperledger.besu.evm.frame.ExceptionalHaltReason.INSUFFICIENT_GAS;
 import static org.hyperledger.besu.evm.frame.MessageFrame.State.EXCEPTIONAL_HALT;
 
+import com.hedera.hapi.node.base.ContractID;
 import com.hedera.hapi.streams.ContractActionType;
 import com.hedera.node.app.service.contract.impl.exec.ActionSidecarContentTracer;
 import com.hedera.node.app.service.contract.impl.exec.AddressChecks;
 import com.hedera.node.app.service.contract.impl.exec.FeatureFlags;
 import com.hedera.node.app.service.contract.impl.exec.systemcontracts.HederaSystemContract;
+import com.hedera.node.app.service.contract.impl.hevm.HederaOpsDuration;
 import com.hedera.node.app.service.contract.impl.state.ProxyEvmContract;
 import com.hedera.node.app.service.contract.impl.state.ProxyWorldUpdater;
-import com.swirlds.config.api.Configuration;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.util.Arrays;
@@ -63,6 +65,7 @@ public class CustomMessageCallProcessor extends MessageCallProcessor {
     private final AddressChecks addressChecks;
     private final PrecompileContractRegistry precompiles;
     private final Map<Address, HederaSystemContract> systemContracts;
+    private final HederaOpsDuration hederaOpsDuration;
 
     private enum ForLazyCreation {
         YES,
@@ -82,12 +85,14 @@ public class CustomMessageCallProcessor extends MessageCallProcessor {
             @NonNull final FeatureFlags featureFlags,
             @NonNull final PrecompileContractRegistry precompiles,
             @NonNull final AddressChecks addressChecks,
-            @NonNull final Map<Address, HederaSystemContract> systemContracts) {
+            @NonNull final Map<Address, HederaSystemContract> systemContracts,
+            @NonNull final HederaOpsDuration hederaOpsDuration) {
         super(evm, precompiles);
         this.featureFlags = Objects.requireNonNull(featureFlags);
         this.precompiles = Objects.requireNonNull(precompiles);
         this.addressChecks = Objects.requireNonNull(addressChecks);
         this.systemContracts = Objects.requireNonNull(systemContracts);
+        this.hederaOpsDuration = Objects.requireNonNull(hederaOpsDuration);
     }
 
     /**
@@ -192,11 +197,10 @@ public class CustomMessageCallProcessor extends MessageCallProcessor {
     }
 
     /**
-     * @param config the current configuration
      * @return whether the implicit creation is currently enabled
      */
-    public boolean isImplicitCreationEnabled(@NonNull Configuration config) {
-        return featureFlags.isImplicitCreationEnabled(config);
+    public boolean isImplicitCreationEnabled() {
+        return featureFlags.isImplicitCreationEnabled();
     }
 
     private void handleNonExtantSystemAccount(
@@ -216,6 +220,8 @@ public class CustomMessageCallProcessor extends MessageCallProcessor {
             result = PrecompileContractResult.halt(Bytes.EMPTY, Optional.of(INSUFFICIENT_GAS));
         } else {
             frame.decrementRemainingGas(gasRequirement);
+            incrementOpsDuration(
+                    frame, gasRequirement * hederaOpsDuration.precompileDurationMultiplier() / MULTIPLIER_FACTOR);
             result = precompile.computePrecompile(frame.getInputData(), frame);
             if (result.isRefundGas()) {
                 frame.incrementRemainingGas(gasRequirement);
@@ -243,7 +249,11 @@ public class CustomMessageCallProcessor extends MessageCallProcessor {
             @NonNull final MessageFrame frame,
             @NonNull final OperationTracer tracer) {
         final var fullResult = systemContract.computeFully(
-                asNumberedContractId(entityIdFactory(frame), systemContractAddress), frame.getInputData(), frame);
+                ContractID.newBuilder()
+                        .contractNum(numberOfLongZero(systemContractAddress))
+                        .build(),
+                frame.getInputData(),
+                frame);
         final var gasRequirement = fullResult.gasRequirement();
         final PrecompileContractResult result;
         if (frame.getRemainingGas() < gasRequirement) {
@@ -251,6 +261,9 @@ public class CustomMessageCallProcessor extends MessageCallProcessor {
         } else {
             if (!fullResult.isRefundGas()) {
                 frame.decrementRemainingGas(gasRequirement);
+                incrementOpsDuration(
+                        frame,
+                        gasRequirement * hederaOpsDuration.systemContractDurationMultiplier() / MULTIPLIER_FACTOR);
             }
             result = fullResult.result();
         }

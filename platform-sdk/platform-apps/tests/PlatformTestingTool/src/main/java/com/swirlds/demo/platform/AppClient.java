@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.demo.platform;
 
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.common.utility.AutoCloseableWrapper;
 import com.swirlds.demo.merkle.map.internal.ExpectedFCMFamily;
 import com.swirlds.platform.system.Platform;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.util.Objects;
+import org.hiero.consensus.model.node.NodeId;
 
 /*
  * Simulate Hedera Client to access file or map without going through
@@ -30,7 +30,7 @@ public class AppClient extends Thread {
             @NonNull final NodeId selfId,
             @NonNull final SuperConfig currentConfig,
             @NonNull final String myName,
-            @NonNull final PlatformTestingToolStateLifecycles stateLifecycles) {
+            @NonNull final PlatformTestingToolConsensusStateEventHandler stateEventHandler) {
         this.platform = Objects.requireNonNull(platform, "platform must not be null");
         this.selfId = Objects.requireNonNull(selfId, "selfId must not be null");
         Objects.requireNonNull(currentConfig, "currentConfig must not be null");
@@ -53,7 +53,7 @@ public class AppClient extends Thread {
         try (final AutoCloseableWrapper<PlatformTestingToolState> wrapper =
                 UnsafeMutablePTTStateAccessor.getInstance().getUnsafeMutableState(platform.getSelfId())) {
             final PlatformTestingToolState state = wrapper.get();
-            submitter = new TransactionSubmitter(submitConfig, stateLifecycles.getControlQuorum());
+            submitter = new TransactionSubmitter(submitConfig, stateEventHandler.getControlQuorum());
             expectedFCMFamily = state.getStateExpectedMap();
         }
 

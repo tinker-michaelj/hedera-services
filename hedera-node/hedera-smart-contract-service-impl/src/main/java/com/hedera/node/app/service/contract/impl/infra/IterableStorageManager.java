@@ -72,25 +72,27 @@ public class IterableStorageManager {
                 final var newFirstContractKey =
                         switch (StorageAccessType.getAccessType(access)) {
                             case UNKNOWN, READ_ONLY, UPDATE -> firstContractKey;
-                                // We might be removing the head slot from the existing list
-                            case REMOVAL -> removeAccessedValue(
-                                    store,
-                                    firstContractKey,
-                                    contractAccesses.contractID(),
-                                    tuweniToPbjBytes(access.key()));
+                            // We might be removing the head slot from the existing list
+                            case REMOVAL ->
+                                removeAccessedValue(
+                                        store,
+                                        firstContractKey,
+                                        contractAccesses.contractID(),
+                                        tuweniToPbjBytes(access.key()));
                             case ZERO_INTO_EMPTY_SLOT -> {
                                 // Ensure a "new" zero isn't put into state, remove from KV state
                                 store.removeSlot(
                                         new SlotKey(contractAccesses.contractID(), tuweniToPbjBytes(access.key())));
                                 yield firstContractKey;
                             }
-                                // We always insert the new slot at the head
-                            case INSERTION -> insertAccessedValue(
-                                    store,
-                                    firstContractKey,
-                                    tuweniToPbjBytes(requireNonNull(access.writtenValue())),
-                                    contractAccesses.contractID(),
-                                    tuweniToPbjBytes(access.key()));
+                            // We always insert the new slot at the head
+                            case INSERTION ->
+                                insertAccessedValue(
+                                        store,
+                                        firstContractKey,
+                                        tuweniToPbjBytes(requireNonNull(access.writtenValue())),
+                                        contractAccesses.contractID(),
+                                        tuweniToPbjBytes(access.key()));
                         };
                 firstKeys.put(contractAccesses.contractID(), newFirstContractKey);
             }

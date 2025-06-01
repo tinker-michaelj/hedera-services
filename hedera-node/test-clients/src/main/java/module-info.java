@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-module com.hedera.node.test.clients {
+import com.hedera.services.bdd.junit.SharedNetworkLauncherSessionListener;
+import org.junit.platform.launcher.LauncherSessionListener;
+
+open module com.hedera.node.test.clients {
     exports com.hedera.services.bdd.spec.dsl;
     exports com.hedera.services.bdd.spec.dsl.contracts;
     exports com.hedera.services.bdd.spec.dsl.utils;
@@ -64,8 +67,12 @@ module com.hedera.node.test.clients {
     exports com.hedera.services.bdd.junit.support.validators.block;
     exports com.hedera.services.bdd.utils;
     exports com.hedera.services.bdd.junit.restart;
+    exports com.hedera.services.bdd.junit.hedera.remote;
+    exports com.hedera.services.bdd.spec.remote;
 
-    requires com.hedera.cryptography.tss;
+    provides LauncherSessionListener with
+            SharedNetworkLauncherSessionListener;
+
     requires com.hedera.node.app.hapi.fees;
     requires com.hedera.node.app.hapi.utils;
     requires com.hedera.node.app.service.addressbook.impl;
@@ -90,6 +97,11 @@ module com.hedera.node.test.clients {
     requires com.swirlds.platform.core;
     requires com.swirlds.state.api;
     requires com.swirlds.virtualmap;
+    requires org.hiero.base.concurrent;
+    requires org.hiero.base.crypto;
+    requires org.hiero.base.utility;
+    requires org.hiero.consensus.model;
+    requires org.hiero.consensus.utility;
     requires com.esaulpaugh.headlong;
     requires com.fasterxml.jackson.annotation;
     requires com.fasterxml.jackson.core;

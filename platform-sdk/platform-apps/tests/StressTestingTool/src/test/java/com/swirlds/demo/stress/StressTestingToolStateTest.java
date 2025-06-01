@@ -12,27 +12,16 @@ import com.hedera.hapi.platform.event.GossipEvent;
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.common.merkle.crypto.internal.MerkleCryptoEngine;
+import com.swirlds.common.merkle.crypto.MerkleCryptography;
 import com.swirlds.common.metrics.platform.DefaultPlatformMetrics;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.common.test.fixtures.Randotron;
 import com.swirlds.config.api.ConfigurationBuilder;
-import com.swirlds.platform.components.transaction.system.ScopedSystemTransaction;
 import com.swirlds.platform.crypto.KeyGeneratingException;
-import com.swirlds.platform.crypto.KeysAndCerts;
-import com.swirlds.platform.crypto.PlatformSigner;
+import com.swirlds.platform.crypto.KeysAndCertsGenerator;
 import com.swirlds.platform.crypto.PublicStores;
-import com.swirlds.platform.event.PlatformEvent;
 import com.swirlds.platform.state.PlatformStateModifier;
 import com.swirlds.platform.system.InitTrigger;
 import com.swirlds.platform.system.Platform;
-import com.swirlds.platform.system.Round;
-import com.swirlds.platform.system.SoftwareVersion;
-import com.swirlds.platform.system.events.ConsensusEvent;
-import com.swirlds.platform.system.transaction.ConsensusTransaction;
-import com.swirlds.platform.system.transaction.Transaction;
-import com.swirlds.platform.system.transaction.TransactionWrapper;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
@@ -41,6 +30,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import org.hiero.base.crypto.Hash;
+import org.hiero.consensus.crypto.PlatformSigner;
+import org.hiero.consensus.model.event.ConsensusEvent;
+import org.hiero.consensus.model.event.PlatformEvent;
+import org.hiero.consensus.model.hashgraph.Round;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.transaction.ConsensusTransaction;
+import org.hiero.consensus.model.transaction.ScopedSystemTransaction;
+import org.hiero.consensus.model.transaction.Transaction;
+import org.hiero.consensus.model.transaction.TransactionWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,7 +50,7 @@ class StressTestingToolStateTest {
     private static final byte[] EMPTY_ARRAY = new byte[] {};
     private StressTestingToolState state;
     private StressTestingToolMain main;
-    private StressTestingToolStateLifecycles stateLifecycles;
+    private StressTestingToolConsensusStateEventHandler consensusStateEventHandler;
     private PlatformStateModifier platformStateModifier;
     private Round round;
     private ConsensusEvent event;
@@ -63,7 +62,7 @@ class StressTestingToolStateTest {
     @BeforeEach
     void setUp() throws NoSuchAlgorithmException, KeyStoreException, KeyGeneratingException, NoSuchProviderException {
         state = new StressTestingToolState();
-        stateLifecycles = new StressTestingToolStateLifecycles();
+        consensusStateEventHandler = new StressTestingToolConsensusStateEventHandler();
         main = new StressTestingToolMain();
         platformStateModifier = mock(PlatformStateModifier.class);
         event = mock(PlatformEvent.class);
@@ -77,8 +76,8 @@ class StressTestingToolStateTest {
 
         final Randotron randotron = Randotron.create();
 
-        final var keysAndCerts =
-                KeysAndCerts.generate(NodeId.FIRST_NODE_ID, EMPTY_ARRAY, EMPTY_ARRAY, EMPTY_ARRAY, new PublicStores());
+        final var keysAndCerts = KeysAndCertsGenerator.generate(
+                NodeId.FIRST_NODE_ID, EMPTY_ARRAY, EMPTY_ARRAY, EMPTY_ARRAY, new PublicStores());
 
         final var signer = new PlatformSigner(keysAndCerts);
         final Hash stateHash = randotron.nextHash();
@@ -92,19 +91,19 @@ class StressTestingToolStateTest {
 
         final var platform = mock(Platform.class);
         final var initTrigger = mock(InitTrigger.class);
-        final var softwareVersion = mock(SoftwareVersion.class);
+        final var softwareVersion = mock(SemanticVersion.class);
         final var platformContext = mock(PlatformContext.class);
         final var config = ConfigurationBuilder.create()
                 .withConfigDataType(StressTestingToolConfig.class)
                 .build();
         final var metrics = mock(DefaultPlatformMetrics.class);
-        final var cryptography = mock(MerkleCryptoEngine.class);
+        final var cryptography = mock(MerkleCryptography.class);
         when(platform.getContext()).thenReturn(platformContext);
         when(platformContext.getConfiguration()).thenReturn(config);
         when(platformContext.getMetrics()).thenReturn(metrics);
         when(platformContext.getMerkleCryptography()).thenReturn(cryptography);
 
-        stateLifecycles.onStateInitialized(state, platform, initTrigger, softwareVersion);
+        consensusStateEventHandler.onStateInitialized(state, platform, initTrigger, softwareVersion);
     }
 
     @ParameterizedTest
@@ -118,7 +117,7 @@ class StressTestingToolStateTest {
         when(transaction.getApplicationTransaction()).thenReturn(Bytes.wrap(pool.transaction()));
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isZero();
@@ -133,7 +132,7 @@ class StressTestingToolStateTest {
         when(transaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(1);
@@ -159,7 +158,7 @@ class StressTestingToolStateTest {
         when(thirdConsensusTransaction.getApplicationTransaction()).thenReturn(stateSignatureTransactionBytes);
 
         // When
-        stateLifecycles.onHandleConsensusRound(round, state, consumer);
+        consensusStateEventHandler.onHandleConsensusRound(round, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(3);
@@ -174,12 +173,15 @@ class StressTestingToolStateTest {
         final var pool = new TransactionPool(1, transactionSize);
 
         final var eventCore = mock(EventCore.class);
-        final var gossipEvent = new GossipEvent(eventCore, null, List.of(Bytes.wrap(pool.transaction())));
+        final var gossipEvent = GossipEvent.newBuilder()
+                .eventCore(eventCore)
+                .transactions(Bytes.wrap(pool.transaction()))
+                .build();
         when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
         event = new PlatformEvent(gossipEvent);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isZero();
@@ -192,12 +194,15 @@ class StressTestingToolStateTest {
 
         final var stateSignatureTransactionBytes = main.encodeSystemTransaction(stateSignatureTransaction);
         final var eventCore = mock(EventCore.class);
-        final var gossipEvent = new GossipEvent(eventCore, null, List.of(stateSignatureTransactionBytes));
+        final var gossipEvent = GossipEvent.newBuilder()
+                .eventCore(eventCore)
+                .transactions(stateSignatureTransactionBytes)
+                .build();
         when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
         event = new PlatformEvent(gossipEvent);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(1);
@@ -211,18 +216,16 @@ class StressTestingToolStateTest {
         final var stateSignatureTransactionBytes = main.encodeSystemTransaction(stateSignatureTransaction);
 
         final var eventCore = mock(EventCore.class);
-        final var gossipEvent = new GossipEvent(
-                eventCore,
-                null,
-                List.of(
-                        stateSignatureTransactionBytes,
-                        stateSignatureTransactionBytes,
-                        stateSignatureTransactionBytes));
+        final var gossipEvent = GossipEvent.newBuilder()
+                .eventCore(eventCore)
+                .transactions(List.of(
+                        stateSignatureTransactionBytes, stateSignatureTransactionBytes, stateSignatureTransactionBytes))
+                .build();
         when(eventCore.timeCreated()).thenReturn(Timestamp.DEFAULT);
         event = new PlatformEvent(gossipEvent);
 
         // When
-        stateLifecycles.onPreHandle(event, state, consumer);
+        consensusStateEventHandler.onPreHandle(event, state, consumer);
 
         // Then
         assertThat(consumedSystemTransactions.size()).isEqualTo(3);
@@ -233,7 +236,7 @@ class StressTestingToolStateTest {
         // Given (empty)
 
         // When
-        final boolean result = stateLifecycles.onSealConsensusRound(round, state);
+        final boolean result = consensusStateEventHandler.onSealConsensusRound(round, state);
 
         // Then
         assertThat(result).isTrue();

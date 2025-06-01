@@ -40,8 +40,8 @@ import com.hedera.node.app.spi.workflows.InsufficientBalanceException;
 import com.hedera.node.app.spi.workflows.PreCheckException;
 import com.hedera.node.app.store.ReadableStoreFactory;
 import com.hedera.node.app.validation.ExpiryValidation;
-import com.hedera.node.app.version.ServicesSoftwareVersion;
 import java.time.Instant;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -100,7 +100,7 @@ class SolvencyPreCheckTest extends AppTestBase {
         @BeforeEach
         void setup() {
             setupStandardStates();
-            storeFactory = new ReadableStoreFactory(state, v -> new ServicesSoftwareVersion());
+            storeFactory = new ReadableStoreFactory(state);
         }
 
         @SuppressWarnings("ConstantConditions")
@@ -152,6 +152,11 @@ class SolvencyPreCheckTest extends AppTestBase {
             assertThatThrownBy(() -> subject.getPayerAccount(storeFactory, ALICE.accountID()))
                     .isInstanceOf(PreCheckException.class)
                     .has(responseCode(ResponseCodeEnum.PAYER_ACCOUNT_NOT_FOUND));
+        }
+
+        @AfterEach
+        void tearDown() {
+            state.release();
         }
     }
 

@@ -17,9 +17,9 @@ tasks.withType<JavaCompile>().configureEach {
 testModuleInfo {
     requires("com.swirlds.common.test.fixtures")
     requires("com.swirlds.base.test.fixtures")
+    requires("org.hiero.base.utility.test.fixtures")
     requires("org.assertj.core")
     requires("org.junit.jupiter.api")
     requires("org.junit.jupiter.params")
     requires("org.mockito")
-    requiresStatic("com.github.spotbugs.annotations")
 }

@@ -13,29 +13,29 @@ package com.swirlds.demo.crypto;
 
 import static com.swirlds.common.threading.manager.AdHocThreadManager.getStaticThreadManager;
 import static com.swirlds.platform.gui.SwirldsGui.createConsole;
-import static com.swirlds.platform.test.fixtures.state.FakeStateLifecycles.FAKE_MERKLE_STATE_LIFECYCLES;
-import static com.swirlds.platform.test.fixtures.state.FakeStateLifecycles.registerMerkleStateRootClassIds;
+import static com.swirlds.platform.test.fixtures.state.TestingAppStateInitializer.registerMerkleStateRootClassIds;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import com.swirlds.common.Console;
-import com.swirlds.common.constructable.ClassConstructorPair;
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.constructable.ConstructableRegistryException;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.common.threading.framework.StoppableThread;
 import com.swirlds.common.threading.framework.config.StoppableThreadConfiguration;
 import com.swirlds.common.utility.AutoCloseableWrapper;
 import com.swirlds.metrics.api.Metrics;
 import com.swirlds.platform.Browser;
-import com.swirlds.platform.state.StateLifecycles;
-import com.swirlds.platform.system.BasicSoftwareVersion;
+import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.system.Platform;
 import com.swirlds.platform.system.SwirldMain;
+import com.swirlds.platform.test.fixtures.state.TestingAppStateInitializer;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.util.Random;
+import org.hiero.base.constructable.ClassConstructorPair;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.constructable.ConstructableRegistryException;
+import org.hiero.consensus.model.node.NodeId;
 
 /**
  * This demonstrates a cryptocurrency and a stock market. There are 10 stocks, and each member repeatedly generates an
@@ -74,7 +74,8 @@ public class CryptocurrencyDemoMain implements SwirldMain<CryptocurrencyDemoStat
     /** is the simulation running fast now? */
     private boolean isFast = false;
 
-    private static final BasicSoftwareVersion softwareVersion = new BasicSoftwareVersion(1);
+    private static final SemanticVersion semanticVersion =
+            SemanticVersion.newBuilder().major(1).build();
 
     private final StoppableThread transactionGenerator;
 
@@ -192,7 +193,7 @@ public class CryptocurrencyDemoMain implements SwirldMain<CryptocurrencyDemoStat
     @NonNull
     public CryptocurrencyDemoState newStateRoot() {
         final CryptocurrencyDemoState state = new CryptocurrencyDemoState();
-        FAKE_MERKLE_STATE_LIFECYCLES.initStates(state);
+        TestingAppStateInitializer.DEFAULT.initStates(state);
         return state;
     }
 
@@ -201,16 +202,16 @@ public class CryptocurrencyDemoMain implements SwirldMain<CryptocurrencyDemoStat
      */
     @Override
     @NonNull
-    public StateLifecycles<CryptocurrencyDemoState> newStateLifecycles() {
-        return new CryptocurrencyDemoStateLifecycles();
+    public ConsensusStateEventHandler<CryptocurrencyDemoState> newConsensusStateEvenHandler() {
+        return new CryptocurrencyDemoConsensusStateEventHandler();
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public BasicSoftwareVersion getSoftwareVersion() {
-        return softwareVersion;
+    public SemanticVersion getSemanticVersion() {
+        return semanticVersion;
     }
 
     @Override

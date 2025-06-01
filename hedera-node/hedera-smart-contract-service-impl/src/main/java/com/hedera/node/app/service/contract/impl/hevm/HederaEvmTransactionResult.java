@@ -25,6 +25,7 @@ import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.ContractID;
 import com.hedera.hapi.node.base.ResponseCodeEnum;
 import com.hedera.hapi.node.contract.ContractFunctionResult;
+import com.hedera.hapi.streams.ContractActionType;
 import com.hedera.hapi.streams.ContractActions;
 import com.hedera.hapi.streams.ContractStateChanges;
 import com.hedera.node.app.hapi.utils.ethereum.EthTxData;
@@ -46,6 +47,7 @@ import org.hyperledger.besu.evm.log.Log;
 
 public record HederaEvmTransactionResult(
         long gasUsed,
+        long opsDuration,
         long gasPrice,
         @NonNull AccountID senderId,
         @Nullable ContractID recipientId,
@@ -120,6 +122,7 @@ public record HederaEvmTransactionResult(
             return asSuccessResultForQuery(updater);
         }
     }
+
     /**
      * Returns the final status of this transaction result.
      *
@@ -158,17 +161,18 @@ public record HederaEvmTransactionResult(
     /**
      * Create a result for a transaction that succeeded.
      *
-     * @param gasUsed the gas used by the transaction
-     * @param senderId the Hedera id of the sender
-     * @param recipientId the Hedera numbered id of the receiving or created contract
+     * @param gasUsed             the gas used by the transaction
+     * @param opsDuration         the hedera osp duration used by the transaction
+     * @param senderId            the Hedera id of the sender
+     * @param recipientId         the Hedera numbered id of the receiving or created contract
      * @param recipientEvmAddress the Hedera aliased id of the receiving or created contract
-     * @param frame the root frame for the transaction
-     * @param tracer the Hedera-specific tracer for the EVM transaction's actions
-     *
+     * @param frame               the root frame for the transaction
+     * @param tracer              the Hedera-specific tracer for the EVM transaction's actions
      * @return the result
      */
     public static HederaEvmTransactionResult successFrom(
             final long gasUsed,
+            final long opsDuration,
             @NonNull final AccountID senderId,
             @NonNull final ContractID recipientId,
             @NonNull final ContractID recipientEvmAddress,
@@ -178,6 +182,7 @@ public record HederaEvmTransactionResult(
         requireNonNull(tracer);
         return successFrom(
                 gasUsed,
+                opsDuration,
                 frame.getGasPrice(),
                 senderId,
                 recipientId,
@@ -190,6 +195,7 @@ public record HederaEvmTransactionResult(
 
     public static HederaEvmTransactionResult successFrom(
             final long gasUsed,
+            final long opsDuration,
             @NonNull final Wei gasPrice,
             @NonNull final AccountID senderId,
             @NonNull final ContractID recipientId,
@@ -200,6 +206,7 @@ public record HederaEvmTransactionResult(
             @Nullable ContractActions actions) {
         return new HederaEvmTransactionResult(
                 gasUsed,
+                opsDuration,
                 requireNonNull(gasPrice).toLong(),
                 requireNonNull(senderId),
                 requireNonNull(recipientId),
@@ -217,16 +224,17 @@ public record HederaEvmTransactionResult(
     /**
      * Create a result for a transaction that failed.
      *
-     * @param gasUsed the gas used by the transaction
-     * @param senderId the Hedera id of the transaction sender
-     * @param frame the initial frame of the transaction
-     * @param recipientId if known, the Hedera id of the receiving contract
-     * @param tracer the Hedera-specific tracer for the EVM transaction's actions
-     *
+     * @param gasUsed           the gas used by the transaction
+     * @param opsDuration       the hedera ops duration used by the transaction
+     * @param senderId          the Hedera id of the transaction sender
+     * @param frame             the initial frame of the transaction
+     * @param recipientId       if known, the Hedera id of the receiving contract
+     * @param tracer            the Hedera-specific tracer for the EVM transaction's actions
      * @return the result
      */
     public static HederaEvmTransactionResult failureFrom(
             final long gasUsed,
+            final long opsDuration,
             @NonNull final AccountID senderId,
             @NonNull final MessageFrame frame,
             @Nullable final ContractID recipientId,
@@ -235,6 +243,7 @@ public record HederaEvmTransactionResult(
         requireNonNull(tracer);
         return new HederaEvmTransactionResult(
                 gasUsed,
+                opsDuration,
                 frame.getGasPrice().toLong(),
                 requireNonNull(senderId),
                 recipientId,
@@ -265,6 +274,7 @@ public record HederaEvmTransactionResult(
         requireNonNull(reason);
         return new HederaEvmTransactionResult(
                 gasUsed,
+                0,
                 gasPrice,
                 requireNonNull(senderId),
                 null,
@@ -282,9 +292,9 @@ public record HederaEvmTransactionResult(
     /**
      * Create a result for a transaction that failed due to validation exceptions.
      *
-     * @param senderId the sender of the EVM transaction
+     * @param senderId    the sender of the EVM transaction
      * @param recipientId the recipient of the EVM transaction
-     * @param reason   the reason for the failure
+     * @param reason      the reason for the failure
      * @return the result
      */
     public static HederaEvmTransactionResult fromAborted(
@@ -294,6 +304,7 @@ public record HederaEvmTransactionResult(
         requireNonNull(senderId);
         requireNonNull(reason);
         return new HederaEvmTransactionResult(
+                0,
                 0,
                 0,
                 senderId,
@@ -322,11 +333,20 @@ public record HederaEvmTransactionResult(
 
     private ContractFunctionResult.Builder asUncommittedFailureResult(@NonNull final String errorMessage) {
         requireNonNull(errorMessage);
-        return ContractFunctionResult.newBuilder()
+        final var builder = ContractFunctionResult.newBuilder()
                 .gasUsed(gasUsed)
                 .errorMessage(errorMessage)
-                .contractID(recipientId)
                 .signerNonce(signerNonce);
+        // checking first action.callType is CREATE to indicate 'create contract' call
+        // we are not setting recipientId as contractID for create contract call  because failed block/receipt should
+        // not contain contractID
+        if (actions() == null
+                || actions().contractActions().isEmpty()
+                || !ContractActionType.CREATE.equals(
+                        actions().contractActions().getFirst().callType())) {
+            builder.contractID(recipientId);
+        }
+        return builder;
     }
 
     private ContractFunctionResult.Builder asSuccessResultForCommitted(@NonNull final RootProxyWorldUpdater updater) {
@@ -405,6 +425,7 @@ public record HederaEvmTransactionResult(
     public HederaEvmTransactionResult withSignerNonce(@Nullable final Long signerNonce) {
         return new HederaEvmTransactionResult(
                 gasUsed,
+                opsDuration,
                 gasPrice,
                 senderId,
                 recipientId,

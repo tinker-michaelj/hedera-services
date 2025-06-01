@@ -7,9 +7,6 @@ import static com.swirlds.logging.legacy.LogMarker.STARTUP;
 import com.swirlds.common.config.StateCommonConfig;
 import com.swirlds.common.context.PlatformContext;
 import com.swirlds.common.io.IOIterator;
-import com.swirlds.common.platform.NodeId;
-import com.swirlds.platform.event.AncientMode;
-import com.swirlds.platform.event.PlatformEvent;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.io.IOException;
@@ -23,6 +20,9 @@ import java.util.Objects;
 import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.consensus.model.event.AncientMode;
+import org.hiero.consensus.model.event.PlatformEvent;
+import org.hiero.consensus.model.node.NodeId;
 
 /**
  * Utilities for preconsensus events.
@@ -53,7 +53,7 @@ public final class PcesUtilities {
 
             while (iterator.hasNext()) {
                 final PlatformEvent next = iterator.next();
-                newUpperBound = Math.max(newUpperBound, next.getAncientIndicator(fileType));
+                newUpperBound = Math.max(newUpperBound, fileType.selectIndicator(next));
             }
 
         } catch (final IOException e) {
@@ -222,11 +222,17 @@ public final class PcesUtilities {
      * with the starting round, or the starting round itself if no file has an original that is compatible with the
      * starting round.
      *
+     * <p>If the starting round is {@link PcesFileManager#NO_LOWER_BOUND}, the origin of the first file is returned.
+     *
      * @param files         the files that have been read from disk
      * @param startingRound the round the system is starting from
      * @return the initial origin round
      */
     public static long getInitialOrigin(@NonNull final PcesFileTracker files, final long startingRound) {
+        if (startingRound == PcesFileManager.NO_LOWER_BOUND) {
+            // if the starting round is NO_LOWER_BOUNDS, return the origin of the first file
+            return files.getFirstFile().getOrigin();
+        }
         final int firstRelevantFileIndex = files.getFirstRelevantFileIndex(startingRound);
         if (firstRelevantFileIndex >= 0) {
             // if there is a file with an origin that is compatible with the starting round, use that origin

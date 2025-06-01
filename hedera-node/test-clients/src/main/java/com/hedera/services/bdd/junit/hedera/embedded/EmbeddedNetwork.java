@@ -4,10 +4,15 @@ package com.hedera.services.bdd.junit.hedera.embedded;
 import static com.hedera.services.bdd.junit.SharedNetworkLauncherSessionListener.CLASSIC_HAPI_TEST_NETWORK_SIZE;
 import static com.hedera.services.bdd.junit.hedera.ExternalPath.APPLICATION_PROPERTIES;
 import static com.hedera.services.bdd.junit.hedera.embedded.EmbeddedMode.REPEATABLE;
+import static com.hedera.services.bdd.junit.hedera.subprocess.ConditionStatus.PENDING;
+import static com.hedera.services.bdd.junit.hedera.subprocess.ConditionStatus.REACHED;
+import static com.hedera.services.bdd.junit.hedera.subprocess.ProcessUtils.conditionFuture;
 import static com.hedera.services.bdd.junit.hedera.utils.AddressBookUtils.classicMetadataFor;
 import static com.hedera.services.bdd.junit.hedera.utils.AddressBookUtils.configTxtForLocal;
 import static com.hedera.services.bdd.junit.hedera.utils.WorkingDirUtils.updateBootstrapProperties;
 import static com.hedera.services.bdd.junit.hedera.utils.WorkingDirUtils.workingDirFor;
+import static com.hedera.services.bdd.spec.HapiPropertySource.getConfigRealm;
+import static com.hedera.services.bdd.spec.HapiPropertySource.getConfigShard;
 import static com.hedera.services.bdd.spec.TargetNetworkType.EMBEDDED_NETWORK;
 import static java.util.Collections.emptyMap;
 import static java.util.Objects.requireNonNull;
@@ -31,6 +36,7 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.apache.logging.log4j.LogManager;
@@ -48,6 +54,8 @@ public class EmbeddedNetwork extends AbstractNetwork {
     private final String configTxt;
     private final EmbeddedMode mode;
     private final EmbeddedNode embeddedNode;
+    private final long shard;
+    private final long realm;
 
     @Nullable
     private EmbeddedHedera embeddedHedera;
@@ -73,8 +81,20 @@ public class EmbeddedNetwork extends AbstractNetwork {
                         .<HederaNode>mapToObj(nodeId -> new EmbeddedNode(
                                 // All non-embedded node working directories are mapped to the embedded node0
                                 classicMetadataFor(
-                                        nodeId, name, FAKE_HOST, 0, 0, 0, 0, 0, workingDirFor(0, workingDir))))
+                                        nodeId,
+                                        name,
+                                        FAKE_HOST,
+                                        0,
+                                        0,
+                                        0,
+                                        0,
+                                        0,
+                                        workingDirFor(0, workingDir),
+                                        getConfigShard(),
+                                        getConfigRealm())))
                         .toList());
+        this.shard = getConfigShard();
+        this.realm = getConfigRealm();
         this.mode = requireNonNull(mode);
         this.embeddedNode = (EmbeddedNode) nodes().getFirst();
         // Even though we are only embedding node0, we generate an address book
@@ -128,6 +148,11 @@ public class EmbeddedNetwork extends AbstractNetwork {
     public void awaitReady(@NonNull Duration timeout) {
         if (embeddedHedera == null) {
             throw new IllegalStateException("EmbeddedNetwork is meant for single-threaded startup, please start it");
+        }
+        if (!embeddedHedera.hedera().systemEntitiesCreated()) {
+            conditionFuture(() -> embeddedHedera.hedera().systemEntitiesCreated() ? REACHED : PENDING, () -> 1)
+                    .orTimeout(1, TimeUnit.SECONDS)
+                    .join();
         }
     }
 
@@ -189,7 +214,18 @@ public class EmbeddedNetwork extends AbstractNetwork {
         // Start the embedded Hedera "network"
         embeddedHedera = switch (mode) {
             case REPEATABLE -> new RepeatableEmbeddedHedera(embeddedNode);
-            case CONCURRENT -> new ConcurrentEmbeddedHedera(embeddedNode);};
+            case CONCURRENT -> new ConcurrentEmbeddedHedera(embeddedNode);
+        };
         start.accept(embeddedHedera);
+    }
+
+    @Override
+    public long shard() {
+        return shard;
+    }
+
+    @Override
+    public long realm() {
+        return realm;
     }
 }

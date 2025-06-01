@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.platform.event;
 
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.constructable.ConstructableRegistryException;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.platform.event.hashing.DefaultEventHasher;
 import com.swirlds.platform.recovery.internal.EventStreamSingleFileIterator;
-import com.swirlds.platform.system.events.EventDescriptorWrapper;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.io.File;
 import java.io.IOException;
@@ -15,8 +10,15 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.constructable.ConstructableRegistryException;
+import org.hiero.base.crypto.Hash;
+import org.hiero.consensus.crypto.DefaultEventHasher;
+import org.hiero.consensus.model.event.EventDescriptorWrapper;
+import org.hiero.consensus.model.event.PlatformEvent;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -29,7 +31,7 @@ public class EventMigrationTest {
     }
 
     public static Stream<Arguments> migrationTestArguments() {
-        return Stream.of(Arguments.of("eventFiles/testnet-59/2025-02-14T00_00_00.005716199Z.evts", 622, 119));
+        return Stream.of();
     }
 
     /**
@@ -40,6 +42,7 @@ public class EventMigrationTest {
      */
     @ParameterizedTest
     @MethodSource("migrationTestArguments")
+    @Disabled("There is no event migration we need to test at the moment. This test is left in place for future use.")
     public void migration(
             @NonNull final String fileName, final int numEventsExpected, final int unmatchedHashesExpected)
             throws URISyntaxException, IOException {

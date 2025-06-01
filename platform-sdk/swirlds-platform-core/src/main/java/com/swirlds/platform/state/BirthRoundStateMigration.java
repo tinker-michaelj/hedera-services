@@ -3,19 +3,18 @@ package com.swirlds.platform.state;
 
 import static com.swirlds.logging.legacy.LogMarker.STARTUP;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.platform.state.ConsensusSnapshot;
 import com.hedera.hapi.platform.state.MinimumJudgeInfo;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
-import com.swirlds.platform.event.AncientMode;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.SignedState;
-import com.swirlds.platform.system.SoftwareVersion;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.consensus.model.event.AncientMode;
 
 /**
  * A utility for migrating the state when birth round mode is first enabled.
@@ -37,7 +36,7 @@ public final class BirthRoundStateMigration {
     public static void modifyStateForBirthRoundMigration(
             @NonNull final SignedState initialState,
             @NonNull final AncientMode ancientMode,
-            @NonNull final SoftwareVersion appVersion,
+            @NonNull final SemanticVersion appVersion,
             @NonNull final PlatformStateFacade platformStateFacade) {
 
         if (ancientMode == AncientMode.GENERATION_THRESHOLD) {
@@ -52,6 +51,22 @@ public final class BirthRoundStateMigration {
         }
 
         final MerkleNodeState state = initialState.getState();
+        final boolean isGenesis = platformStateFacade.isGenesisStateOf(state);
+        if (isGenesis) {
+            if (ancientMode == AncientMode.BIRTH_ROUND_THRESHOLD) {
+                logger.info(
+                        STARTUP.getMarker(),
+                        "Starting from genesis with birth round ancient mode. Setting first version in birth round mode to {}.",
+                        appVersion);
+                platformStateFacade.bulkUpdateOf(state, v -> {
+                    v.setFirstVersionInBirthRoundMode(appVersion);
+                });
+            }
+            // Genesis state, no action needed.
+            logger.info(STARTUP.getMarker(), "Birth round state migration is not needed for genesis state.");
+            return;
+        }
+
         final boolean alreadyMigrated = platformStateFacade.firstVersionInBirthRoundModeOf(state) != null;
         if (alreadyMigrated) {
             // Birth round migration was completed at a prior time, no action needed.
@@ -85,15 +100,16 @@ public final class BirthRoundStateMigration {
         for (final MinimumJudgeInfo judgeInfo : judgeInfoList) {
             modifiedJudgeInfoList.add(new MinimumJudgeInfo(judgeInfo.round(), lastRoundBeforeMigration));
         }
-        final ConsensusSnapshot modifiedConsensusSnapshot = new ConsensusSnapshot(
-                consensusSnapshot.round(),
-                consensusSnapshot.judgeHashes(),
-                modifiedJudgeInfoList,
-                consensusSnapshot.nextConsensusNumber(),
-                consensusSnapshot.consensusTimestamp());
+        final ConsensusSnapshot modifiedConsensusSnapshot = ConsensusSnapshot.newBuilder()
+                .round(consensusSnapshot.round())
+                .consensusTimestamp(consensusSnapshot.consensusTimestamp())
+                .judgeIds(consensusSnapshot.judgeIds())
+                .judgeHashes(consensusSnapshot.judgeHashes())
+                .nextConsensusNumber(consensusSnapshot.nextConsensusNumber())
+                .minimumJudgeInfoList(modifiedJudgeInfoList)
+                .build();
         platformStateFacade.setSnapshotTo(state, modifiedConsensusSnapshot);
 
         state.invalidateHash();
-        MerkleCryptoFactory.getInstance().digestTreeSync(state.getRoot());
     }
 }

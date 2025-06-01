@@ -24,9 +24,11 @@ import static java.util.Collections.emptySet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -95,7 +97,6 @@ import com.hedera.node.app.store.ReadableStoreFactory;
 import com.hedera.node.app.store.ServiceApiFactory;
 import com.hedera.node.app.store.StoreFactoryImpl;
 import com.hedera.node.app.store.WritableStoreFactory;
-import com.hedera.node.app.version.ServicesSoftwareVersion;
 import com.hedera.node.app.workflows.TransactionChecker;
 import com.hedera.node.app.workflows.TransactionInfo;
 import com.hedera.node.app.workflows.dispatcher.TransactionDispatcher;
@@ -287,12 +288,39 @@ public class DispatchHandleContextTest extends StateTestBase implements Scenario
     @BeforeEach
     void setup() {
         when(serviceScopeLookup.getServiceName(any())).thenReturn(TokenService.NAME);
-        readableStoreFactory = new ReadableStoreFactory(baseState, ServicesSoftwareVersion::new);
+        readableStoreFactory = new ReadableStoreFactory(baseState);
         apiFactory = new ServiceApiFactory(stack, configuration);
         storeFactory = new StoreFactoryImpl(readableStoreFactory, writableStoreFactory, apiFactory);
         subject = createContext(txBody);
 
         mockNeeded();
+    }
+
+    @Test
+    void delegatesFeeChargingForPayer() {
+        given(feeAccumulator.chargeFee(payerId, 123L, null)).willReturn(new Fees(0, 123L, 0));
+
+        assertTrue(subject.tryToChargePayer(123L));
+    }
+
+    @Test
+    void failsFastOnNegativeAmounts() {
+        assertThrows(IllegalArgumentException.class, () -> subject.tryToChargePayer(-123L));
+        assertThrows(IllegalArgumentException.class, () -> subject.refundBestEffort(payerId, -123L));
+    }
+
+    @Test
+    void delegatesFeeChargingForOtherAccount() {
+        given(feeAccumulator.chargeFee(AccountID.DEFAULT, 123L, null)).willReturn(new Fees(0, 122L, 0));
+
+        assertFalse(subject.tryToCharge(AccountID.DEFAULT, 123L));
+    }
+
+    @Test
+    void delegatesRefunding() {
+        subject.refundBestEffort(payerId, 123L);
+
+        verify(feeAccumulator).refundFee(payerId, 123L);
     }
 
     @Test
@@ -390,7 +418,8 @@ public class DispatchHandleContextTest extends StateTestBase implements Scenario
             feeAccumulator,
             EMPTY_METADATA,
             transactionChecker,
-            List.of(result)
+            List.of(result),
+            USER
         };
 
         final var constructor = DispatchHandleContext.class.getConstructors()[0];
@@ -693,7 +722,7 @@ public class DispatchHandleContextTest extends StateTestBase implements Scenario
             final var context = createContext(txBody, HandleContext.TransactionCategory.USER);
 
             Mockito.lenient().when(verifier.verificationFor((Key) any())).thenReturn(verification);
-            given(childDispatch.recordBuilder()).willReturn(childRecordBuilder);
+            given(childDispatch.streamBuilder()).willReturn(childRecordBuilder);
             given(childRecordBuilder.getPaidStakingRewards())
                     .willReturn(List.of(
                             AccountAmount.newBuilder()
@@ -792,7 +821,8 @@ public class DispatchHandleContextTest extends StateTestBase implements Scenario
                 feeAccumulator,
                 EMPTY_METADATA,
                 transactionChecker,
-                results);
+                results,
+                category);
     }
 
     private void mockNeeded() {
@@ -800,7 +830,7 @@ public class DispatchHandleContextTest extends StateTestBase implements Scenario
                 .when(childDispatchFactory.createChildDispatch(
                         any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(childDispatch);
-        lenient().when(childDispatch.recordBuilder()).thenReturn(childRecordBuilder);
+        lenient().when(childDispatch.streamBuilder()).thenReturn(childRecordBuilder);
         lenient()
                 .when(stack.getWritableStates(TokenService.NAME))
                 .thenReturn(MapWritableStates.builder()

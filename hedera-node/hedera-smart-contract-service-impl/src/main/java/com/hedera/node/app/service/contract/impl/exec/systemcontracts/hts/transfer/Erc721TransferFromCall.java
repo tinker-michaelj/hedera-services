@@ -87,8 +87,7 @@ public class Erc721TransferFromCall extends AbstractCall {
             return reversionWith(INVALID_TOKEN_ID, gasCalculator.canonicalGasRequirement(DispatchType.TRANSFER_NFT));
         }
         final var syntheticTransfer = syntheticTransfer(senderId);
-        final var gasRequirement = transferGasRequirement(
-                syntheticTransfer, gasCalculator, enhancement, senderId, ERC_721_TRANSFER_FROM.selector());
+        final var gasRequirement = transferGasRequirement(syntheticTransfer, gasCalculator, enhancement, senderId);
         final var recordBuilder = systemContractOperations()
                 .dispatch(syntheticTransfer, verificationStrategy, senderId, ContractCallStreamBuilder.class);
         final var status = recordBuilder.status();
@@ -131,8 +130,8 @@ public class Erc721TransferFromCall extends AbstractCall {
 
     @Nullable
     private AccountID getOwner() {
-        final var nft = nativeOperations().getNft(tokenId.tokenNum(), serialNo);
-        final var token = nativeOperations().getToken(tokenId.tokenNum());
+        final var nft = nativeOperations().getNft(tokenId, serialNo);
+        final var token = nativeOperations().getToken(tokenId);
         return nft != null ? nft.ownerIdOrElse(token.treasuryAccountIdOrThrow()) : null;
     }
 }

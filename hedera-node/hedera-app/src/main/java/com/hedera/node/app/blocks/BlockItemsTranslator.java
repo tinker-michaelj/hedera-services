@@ -61,11 +61,8 @@ public class BlockItemsTranslator {
                 .exchangeRate(context.transactionExchangeRates());
         final var function = context.functionality();
         switch (function) {
-            case CONTRACT_CALL,
-                    CONTRACT_CREATE,
-                    CONTRACT_DELETE,
-                    CONTRACT_UPDATE,
-                    ETHEREUM_TRANSACTION -> receiptBuilder.contractID(((ContractOpContext) context).contractId());
+            case CONTRACT_CALL, CONTRACT_CREATE, CONTRACT_DELETE, CONTRACT_UPDATE, ETHEREUM_TRANSACTION ->
+                receiptBuilder.contractID(((ContractOpContext) context).contractId());
             case CRYPTO_CREATE, CRYPTO_UPDATE -> receiptBuilder.accountID(((CryptoOpContext) context).accountId());
             case FILE_CREATE -> receiptBuilder.fileID(((FileOpContext) context).fileId());
             case NODE_CREATE -> receiptBuilder.nodeId(((NodeOpContext) context).nodeId());
@@ -86,15 +83,17 @@ public class BlockItemsTranslator {
                     receiptBuilder.scheduledTransactionID(signOutput.scheduledTransactionId());
                 }
             }
-            case CONSENSUS_SUBMIT_MESSAGE -> receiptBuilder
-                    .topicRunningHashVersion(((SubmitOpContext) context).runningHashVersion())
-                    .topicSequenceNumber(((SubmitOpContext) context).sequenceNumber())
-                    .topicRunningHash(((SubmitOpContext) context).runningHash());
-            case TOKEN_MINT -> receiptBuilder
-                    .newTotalSupply(((MintOpContext) context).newTotalSupply())
-                    .serialNumbers(((MintOpContext) context).serialNumbers());
-            case TOKEN_BURN, TOKEN_ACCOUNT_WIPE -> receiptBuilder.newTotalSupply(
-                    ((SupplyChangeOpContext) context).newTotalSupply());
+            case CONSENSUS_SUBMIT_MESSAGE ->
+                receiptBuilder
+                        .topicRunningHashVersion(((SubmitOpContext) context).runningHashVersion())
+                        .topicSequenceNumber(((SubmitOpContext) context).sequenceNumber())
+                        .topicRunningHash(((SubmitOpContext) context).runningHash());
+            case TOKEN_MINT ->
+                receiptBuilder
+                        .newTotalSupply(((MintOpContext) context).newTotalSupply())
+                        .serialNumbers(((MintOpContext) context).serialNumbers());
+            case TOKEN_BURN, TOKEN_ACCOUNT_WIPE ->
+                receiptBuilder.newTotalSupply(((SupplyChangeOpContext) context).newTotalSupply());
             case TOKEN_CREATE -> receiptBuilder.tokenID(((TokenOpContext) context).tokenId());
             case CONSENSUS_CREATE_TOPIC -> receiptBuilder.topicID(((TopicOpContext) context).topicId());
         }
@@ -127,6 +126,7 @@ public class BlockItemsTranslator {
                 .transferList(result.transferList())
                 .tokenTransferLists(result.tokenTransferLists())
                 .automaticTokenAssociations(result.automaticTokenAssociations())
+                .assessedCustomFees(result.assessedCustomFees())
                 .paidStakingRewards(result.paidStakingRewards());
         final var function = context.functionality();
         switch (function) {
@@ -143,10 +143,10 @@ public class BlockItemsTranslator {
                     if (ethOutput != null) {
                         recordBuilder.ethereumHash(ethOutput.ethereumHash());
                         switch (ethOutput.ethResult().kind()) {
-                            case ETHEREUM_CALL_RESULT -> recordBuilder.contractCallResult(
-                                    ethOutput.ethereumCallResultOrThrow());
-                            case ETHEREUM_CREATE_RESULT -> recordBuilder.contractCreateResult(
-                                    ethOutput.ethereumCreateResultOrThrow());
+                            case ETHEREUM_CALL_RESULT ->
+                                recordBuilder.contractCallResult(ethOutput.ethereumCallResultOrThrow());
+                            case ETHEREUM_CREATE_RESULT ->
+                                recordBuilder.contractCreateResult(ethOutput.ethereumCreateResultOrThrow());
                         }
                     }
                 }
@@ -158,26 +158,10 @@ public class BlockItemsTranslator {
                     recordBuilder.contractCallResult(synthResult);
                 }
                 switch (function) {
-                    case CRYPTO_TRANSFER -> {
-                        final var cryptoOutput = outputValueIfPresent(
-                                TransactionOutput::hasCryptoTransfer,
-                                TransactionOutput::cryptoTransferOrThrow,
-                                outputs);
-                        if (cryptoOutput != null) {
-                            recordBuilder.assessedCustomFees(cryptoOutput.assessedCustomFees());
-                        }
-                    }
-                    case CONSENSUS_SUBMIT_MESSAGE -> {
-                        final var submitMessageOutput = outputValueIfPresent(
-                                TransactionOutput::hasSubmitMessage, TransactionOutput::submitMessageOrThrow, outputs);
-                        if (submitMessageOutput != null) {
-                            recordBuilder.assessedCustomFees(submitMessageOutput.assessedCustomFees());
-                        }
-                    }
-                    case CRYPTO_CREATE, CRYPTO_UPDATE -> recordBuilder.evmAddress(
-                            ((CryptoOpContext) context).evmAddress());
-                    case TOKEN_AIRDROP -> recordBuilder.newPendingAirdrops(
-                            ((AirdropOpContext) context).pendingAirdropRecords());
+                    case CRYPTO_CREATE, CRYPTO_UPDATE ->
+                        recordBuilder.evmAddress(((CryptoOpContext) context).evmAddress());
+                    case TOKEN_AIRDROP ->
+                        recordBuilder.newPendingAirdrops(((AirdropOpContext) context).pendingAirdropRecords());
                     case UTIL_PRNG -> {
                         final var prngOutput = outputValueIfPresent(
                                 TransactionOutput::hasUtilPrng, TransactionOutput::utilPrngOrThrow, outputs);

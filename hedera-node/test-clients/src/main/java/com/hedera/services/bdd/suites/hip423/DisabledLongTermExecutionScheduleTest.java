@@ -7,18 +7,29 @@ import static com.hedera.services.bdd.spec.queries.QueryVerbs.getAccountBalance;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getScheduleInfo;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoCreate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.cryptoTransfer;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.nodeCreate;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.nodeDelete;
+import static com.hedera.services.bdd.spec.transactions.TxnVerbs.nodeUpdate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.scheduleCreate;
 import static com.hedera.services.bdd.spec.transactions.TxnVerbs.scheduleSign;
 import static com.hedera.services.bdd.spec.transactions.crypto.HapiCryptoTransfer.tinyBarsFromTo;
+import static com.hedera.services.bdd.spec.utilops.UtilVerbs.newKeyNamed;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.overriding;
 import static com.hedera.services.bdd.spec.utilops.UtilVerbs.sleepFor;
 import static com.hedera.services.bdd.suites.HapiSuite.ONE_HBAR;
+import static com.hedera.services.bdd.suites.hip869.NodeCreateTest.ED_25519_KEY;
+import static com.hedera.services.bdd.suites.hip869.NodeCreateTest.GOSSIP_ENDPOINTS_IPS;
+import static com.hedera.services.bdd.suites.hip869.NodeCreateTest.SERVICES_ENDPOINTS_IPS;
+import static com.hedera.services.bdd.suites.hip869.NodeCreateTest.generateX509Certificates;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.INVALID_SCHEDULE_ID;
+import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.SCHEDULED_TRANSACTION_NOT_IN_WHITELIST;
+import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.SCHEDULE_EXPIRY_NOT_CONFIGURABLE;
 
 import com.hedera.services.bdd.junit.HapiTest;
 import com.hedera.services.bdd.junit.HapiTestLifecycle;
 import com.hedera.services.bdd.junit.RepeatableHapiTest;
 import com.hedera.services.bdd.junit.support.TestLifecycle;
+import com.hedera.services.bdd.spec.keys.KeyShape;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -64,8 +75,6 @@ public class DisabledLongTermExecutionScheduleTest {
                                 THREE_SIG_XFER,
                                 cryptoTransfer(tinyBarsFromTo(SENDER, RECEIVER, 1))
                                         .fee(ONE_HBAR))
-                        .withRelativeExpiry(SENDER_TXN, 50)
-                        .waitForExpiry(true)
                         .designatingPayer(PAYER)
                         .alsoSigningWith(SENDER, RECEIVER),
                 getAccountBalance(RECEIVER).hasTinyBars(0L),
@@ -87,8 +96,6 @@ public class DisabledLongTermExecutionScheduleTest {
                                 THREE_SIG_XFER,
                                 cryptoTransfer(tinyBarsFromTo(SENDER, RECEIVER, 1))
                                         .fee(ONE_HBAR))
-                        .withRelativeExpiry(SENDER_TXN, 20)
-                        .waitForExpiry(true)
                         .designatingPayer(SENDER),
                 scheduleSign(THREE_SIG_XFER).alsoSigningWith(SENDER, RECEIVER),
                 getScheduleInfo(THREE_SIG_XFER)
@@ -101,7 +108,6 @@ public class DisabledLongTermExecutionScheduleTest {
     @HapiTest
     @Order(3)
     public Stream<DynamicTest> waitForExpiryIgnoredWhenLongTermDisabledThenEnabled() {
-
         return hapiTest(
                 cryptoCreate(PAYER).balance(ONE_HBAR),
                 cryptoCreate(SENDER).balance(1L).via(SENDER_TXN),
@@ -110,8 +116,6 @@ public class DisabledLongTermExecutionScheduleTest {
                                 THREE_SIG_XFER,
                                 cryptoTransfer(tinyBarsFromTo(SENDER, RECEIVER, 1))
                                         .fee(ONE_HBAR))
-                        .withRelativeExpiry(SENDER_TXN, 4)
-                        .waitForExpiry(true)
                         .designatingPayer(PAYER)
                         .alsoSigningWith(SENDER, RECEIVER),
                 getAccountBalance(RECEIVER).hasTinyBars(0L),
@@ -137,8 +141,6 @@ public class DisabledLongTermExecutionScheduleTest {
                                 THREE_SIG_XFER,
                                 cryptoTransfer(tinyBarsFromTo(SENDER, RECEIVER, 1))
                                         .fee(ONE_HBAR))
-                        .withRelativeExpiry(SENDER_TXN, 4)
-                        .waitForExpiry(true)
                         .designatingPayer(PAYER)
                         .via(CREATE_TXN),
                 getScheduleInfo(THREE_SIG_XFER)
@@ -175,5 +177,54 @@ public class DisabledLongTermExecutionScheduleTest {
                 sleepFor(TimeUnit.MINUTES.toMillis(31)),
                 cryptoCreate("foo").via("triggerCleanUpTxn"),
                 getScheduleInfo(BASIC_XFER).hasCostAnswerPrecheck(INVALID_SCHEDULE_ID));
+    }
+
+    @HapiTest
+    public Stream<DynamicTest> scheduleWithExpirationTimeAndLongTermSchedulesDisabled() {
+        return hapiTest(
+                cryptoCreate(SENDER),
+                cryptoCreate(RECEIVER),
+                scheduleCreate(BASIC_XFER, cryptoTransfer(tinyBarsFromTo(SENDER, RECEIVER, 1)))
+                        .expiringAt(10)
+                        .hasKnownStatus(SCHEDULE_EXPIRY_NOT_CONFIGURABLE));
+    }
+
+    @HapiTest
+    final Stream<DynamicTest> scheduleNodeCreateNotSupportedWhenNotInWhitelist() {
+        return hapiTest(
+                scheduleCreate("schedule", nodeCreate("test")).hasKnownStatus(SCHEDULED_TRANSACTION_NOT_IN_WHITELIST));
+    }
+
+    @HapiTest
+    final Stream<DynamicTest> scheduleNodeUpdateNotSupportedWhenNotInWhitelist() throws Exception {
+        return hapiTest(
+                newKeyNamed(ED_25519_KEY).shape(KeyShape.ED25519),
+                nodeCreate("test")
+                        .description("hello")
+                        .gossipCaCertificate(
+                                generateX509Certificates(2).getFirst().getEncoded())
+                        .grpcCertificateHash("hash".getBytes())
+                        .accountNum(100)
+                        .gossipEndpoint(GOSSIP_ENDPOINTS_IPS)
+                        .serviceEndpoint(SERVICES_ENDPOINTS_IPS)
+                        .adminKey(ED_25519_KEY),
+                scheduleCreate("schedule", nodeUpdate("test").description("hello2"))
+                        .hasKnownStatus(SCHEDULED_TRANSACTION_NOT_IN_WHITELIST));
+    }
+
+    @HapiTest
+    final Stream<DynamicTest> scheduleNodeDeleteNotSupportedWhenNotInWhitelist() throws Exception {
+        return hapiTest(
+                newKeyNamed(ED_25519_KEY).shape(KeyShape.ED25519),
+                nodeCreate("test")
+                        .description("hello")
+                        .gossipCaCertificate(
+                                generateX509Certificates(2).getFirst().getEncoded())
+                        .grpcCertificateHash("hash".getBytes())
+                        .accountNum(100)
+                        .gossipEndpoint(GOSSIP_ENDPOINTS_IPS)
+                        .serviceEndpoint(SERVICES_ENDPOINTS_IPS)
+                        .adminKey(ED_25519_KEY),
+                scheduleCreate("payerOnly", nodeDelete("test")).hasKnownStatus(SCHEDULED_TRANSACTION_NOT_IN_WHITELIST));
     }
 }

@@ -1735,43 +1735,70 @@ enum ResponseCodeEnum {
     INVALID_BATCH_KEY = 394;
 
     /**
+     * The provided schedule expiry time is not configurable.
+     */
+    SCHEDULE_EXPIRY_NOT_CONFIGURABLE = 395;
+
+    /**
+     * The network just started at genesis and is creating system entities.
+     */
+    CREATING_SYSTEM_ENTITIES = 396;
+
+    /**
+     * The least common multiple of the throttle group's milliOpsPerSec is
+     * too large and it's overflowing.
+     */
+    THROTTLE_GROUP_LCM_OVERFLOW = 397;
+
+    /**
+     * Token airdrop transactions can not contain multiple senders for a single token.
+     */
+    AIRDROP_CONTAINS_MULTIPLE_SENDERS_FOR_A_TOKEN = 398;
+
+    /**
+     * The GRPC proxy endpoint is set in the NodeCreate or NodeUpdate transaction,
+     * which the network does not support.
+     */
+    GRPC_WEB_PROXY_NOT_SUPPORTED = 399;
+
+    /**
      * An EVM hook execution was throttled due to high network gas utilization.
      */
-    EVM_HOOK_GAS_THROTTLED = 395;
+    EVM_HOOK_GAS_THROTTLED = 400;
 
     /**
      * A user attempted to install a hook at an index already in use.
      */
-    HOOK_INDEX_IN_USE = 396;
+    HOOK_INDEX_IN_USE = 401;
 
     /**
      * A transaction tried to execute a hook that did not match the specified
      * type or was malformed in some other way.
      */
-    BAD_HOOK_REQUEST = 397;
+    BAD_HOOK_REQUEST = 402;
 
     /**
      * A CryptoTransfer relying on a ACCOUNT_ALLOWANCE hook was rejected.
      */
-    REJECTED_BY_ACCOUNT_ALLOWANCE_HOOK = 398;
+    REJECTED_BY_ACCOUNT_ALLOWANCE_HOOK = 403;
 
     /**
      * A hook id was not found.
      */
-    HOOK_NOT_FOUND = 399;
+    HOOK_NOT_FOUND = 404;
 
     /**
      * A lambda storage key was too long.
      */
-    LAMBDA_STORAGE_KEY_TOO_LONG = 400;
+    LAMBDA_STORAGE_KEY_TOO_LONG = 405;
 
     /**
      * A lambda storage value was too long.
      */
-    LAMBDA_STORAGE_VALUE_TOO_LONG = 401;
+    LAMBDA_STORAGE_VALUE_TOO_LONG = 406;
 
     /**
      * A hook id was invalid.
      */
-    INVALID_HOOK_ID = 402;
+    INVALID_HOOK_ID = 407;
 }

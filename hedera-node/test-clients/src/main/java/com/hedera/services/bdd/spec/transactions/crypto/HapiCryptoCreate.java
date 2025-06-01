@@ -2,14 +2,16 @@
 package com.hedera.services.bdd.spec.transactions.crypto;
 
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.explicitFromHeadlong;
+import static com.hedera.services.bdd.spec.HapiPropertySource.asAccount;
 import static com.hedera.services.bdd.spec.HapiPropertySource.asAccountString;
-import static com.hedera.services.bdd.spec.HapiPropertySource.idAsHeadlongAddress;
+import static com.hedera.services.bdd.spec.HapiPropertySource.asRealm;
+import static com.hedera.services.bdd.spec.HapiPropertySource.asShard;
 import static com.hedera.services.bdd.spec.keys.KeyFactory.KeyType;
-import static com.hedera.services.bdd.spec.transactions.TxnUtils.asId;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.bannerWith;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.netOf;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.suFrom;
 import static com.hedera.services.bdd.spec.utilops.CustomSpecAssert.allRunFor;
+import static com.hedera.services.bdd.suites.contract.Utils.idAsHeadlongAddress;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.SUCCESS;
 
 import com.esaulpaugh.headlong.abi.Address;
@@ -21,15 +23,16 @@ import com.hedera.node.app.hapi.fees.usage.state.UsageAccumulator;
 import com.hedera.node.app.hapi.utils.CommonPbjConverters;
 import com.hedera.node.app.hapi.utils.EthSigsUtils;
 import com.hedera.node.app.hapi.utils.fee.SigValueObj;
-import com.hedera.services.bdd.spec.HapiPropertySource;
 import com.hedera.services.bdd.spec.HapiSpec;
 import com.hedera.services.bdd.spec.fees.AdapterUtils;
 import com.hedera.services.bdd.spec.infrastructure.meta.InitialAccountIdentifiers;
 import com.hedera.services.bdd.spec.keys.SigControl;
 import com.hedera.services.bdd.spec.transactions.HapiTxnOp;
+import com.hedera.services.bdd.spec.transactions.TxnUtils;
 import com.hedera.services.bdd.spec.transactions.contract.HapiParserUtil;
 import com.hedera.services.bdd.spec.transactions.lambda.HookInstaller;
 import com.hederahashgraph.api.proto.java.AccountID;
+import com.hederahashgraph.api.proto.java.ContractID;
 import com.hederahashgraph.api.proto.java.CryptoCreateTransactionBody;
 import com.hederahashgraph.api.proto.java.Duration;
 import com.hederahashgraph.api.proto.java.FeeData;
@@ -61,6 +64,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
     private boolean recharging = false;
 
     private boolean advertiseCreation = false;
+    private boolean asCallableContract = false;
     private boolean forgettingEverything = false;
     /** The time window (unit of second) of not doing another recharge if just recharged recently */
     private Optional<Integer> rechargeWindow = Optional.empty();
@@ -70,7 +74,7 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
     private Optional<Long> receiveThresh = Optional.empty();
     private Optional<Long> initialBalance = Optional.empty();
     private Optional<Long> autoRenewDurationSecs = Optional.empty();
-    private Optional<AccountID> proxy = Optional.empty();
+    private Optional<String> proxy = Optional.empty();
     private Optional<Boolean> receiverSigRequired = Optional.empty();
     private Optional<String> keyName = Optional.empty();
     private Optional<String> entityMemo = Optional.empty();
@@ -118,6 +122,11 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
 
     public HapiCryptoCreate advertisingCreation() {
         advertiseCreation = true;
+        return this;
+    }
+
+    public HapiCryptoCreate asCallableContract() {
+        asCallableContract = true;
         return this;
     }
 
@@ -206,18 +215,23 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
         return this;
     }
 
-    public HapiCryptoCreate proxy(final String idLit) {
-        proxy = Optional.of(HapiPropertySource.asAccount(idLit));
+    public HapiCryptoCreate proxy(final String acctNum) {
+        proxy = Optional.of(acctNum);
         return this;
     }
 
-    public HapiCryptoCreate stakedAccountId(final String idLit) {
-        stakedAccountId = Optional.of(idLit);
+    public HapiCryptoCreate stakedAccountId(final String acct) {
+        stakedAccountId = Optional.of(acct);
         return this;
     }
 
-    public HapiCryptoCreate stakedNodeId(final long idLit) {
-        stakedNodeId = Optional.of(idLit);
+    public HapiCryptoCreate stakedAccountId(final long acctNum) {
+        stakedAccountId = Optional.of(Long.toString(acctNum));
+        return this;
+    }
+
+    public HapiCryptoCreate stakedNodeId(final long acctNum) {
+        stakedNodeId = Optional.of(acctNum);
         return this;
     }
 
@@ -298,7 +312,10 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
                                 b.setUnknownFields(nonEmptyUnknownFields());
                             }
 
-                            proxy.ifPresent(b::setProxyAccountID);
+                            final var effectiveShard = shardId.orElseGet(() -> asShard(spec.shard()));
+                            final var effectiveRealm = realmId.orElseGet(() -> asRealm(spec.realm()));
+                            proxy.ifPresent(p -> b.setStakedAccountId(asAccount(
+                                    effectiveShard.getShardNum(), effectiveRealm.getRealmNum(), Long.parseLong(p))));
                             entityMemo.ifPresent(b::setMemo);
                             sendThresh.ifPresent(b::setSendRecordThreshold);
                             receiveThresh.ifPresent(b::setReceiveRecordThreshold);
@@ -310,7 +327,18 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
                             shardId.ifPresent(b::setShardID);
                             realmId.ifPresent(b::setRealmID);
                             if (stakedAccountId.isPresent()) {
-                                b.setStakedAccountId(asId(stakedAccountId.get(), spec));
+                                // Calculate and assign the effective staked account ID
+                                AccountID effectiveStakedAcctId = TxnUtils.asId(stakedAccountId.get(), spec);
+                                // If the calculated effective shard/realm doesn't match the spec's shard/realm,
+                                // override the spec's values
+                                if (spec.shard() != effectiveShard.getShardNum()
+                                        || spec.realm() != effectiveRealm.getRealmNum()) {
+                                    effectiveStakedAcctId = effectiveStakedAcctId.toBuilder()
+                                            .setShardNum(effectiveShard.getShardNum())
+                                            .setRealmNum(effectiveRealm.getRealmNum())
+                                            .build();
+                                }
+                                b.setStakedAccountId(effectiveStakedAcctId);
                             } else if (stakedNodeId.isPresent()) {
                                 b.setStakedNodeId(stakedNodeId.get());
                             }
@@ -356,6 +384,16 @@ public class HapiCryptoCreate extends HapiTxnOp<HapiCryptoCreate> {
                             "Created account '%s' with id '%s'.",
                             account, asAccountString(lastReceipt.getAccountID())));
             log.info(banner);
+        }
+        if (asCallableContract) {
+            spec.registry()
+                    .saveContractId(
+                            account,
+                            ContractID.newBuilder()
+                                    .setShardNum(createdAccountId.getShardNum())
+                                    .setRealmNum(createdAccountId.getRealmNum())
+                                    .setContractNum(createdAccountId.getAccountNum())
+                                    .build());
         }
     }
 
