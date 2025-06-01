@@ -23,6 +23,8 @@ import static com.swirlds.platform.system.InitTrigger.GENESIS;
 import static java.util.Objects.requireNonNull;
 import static org.hiero.consensus.roster.RosterUtils.formatNodeName;
 
+import com.google.common.base.Strings;
+import com.goterl.lazysodium.utils.HexMessageEncoder;
 import com.hedera.hapi.node.addressbook.NodeCreateTransactionBody;
 import com.hedera.hapi.node.addressbook.NodeUpdateTransactionBody;
 import com.hedera.hapi.node.base.AccountID;
@@ -34,6 +36,7 @@ import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.node.base.ServiceEndpoint;
 import com.hedera.hapi.node.base.TransactionID;
 import com.hedera.hapi.node.consensus.ConsensusCreateTopicTransactionBody;
+import com.hedera.hapi.node.contract.ContractCreateTransactionBody;
 import com.hedera.hapi.node.state.common.EntityNumber;
 import com.hedera.hapi.node.state.roster.RosterEntry;
 import com.hedera.hapi.node.state.token.StakingNodeInfo;
@@ -327,6 +330,7 @@ public class SystemTransactions {
         setupPlexAccounts(systemContext);
         setupPlexTokens(systemContext);
         setupPlexTopics(systemContext);
+        setupPlexFeeCollector(systemContext);
     }
 
     private static final long FIRST_ACCOUNT_NUM = 10000L;
@@ -334,39 +338,89 @@ public class SystemTransactions {
     private static final long FIRST_TOPIC_NUM = 30000L;
 
     private static final String HEXED_PUBLIC_KEY = "72d84208f4f546fffc79d31f0cbfa7352c38887efe4fe0475270e9a38f56accf";
+    private static final String A4589187_PUBLIC_KEY =
+            "ac228a873619e041648113a84f12079b8af8522073adc343e1a91594f0b1c05d";
+    private static final String A4589188_PUBLIC_KEY =
+            "2cfc00272518122e7c080b94fb01dae7b6ac6f0d92e5314d97583b75ac4996c0";
+    private static final String A4589189_PUBLIC_KEY =
+            "77afcb2b3edd975e9df3ceeafba49e9eab1e65949de2c10eb54a4fe695b4c7f8";
+    private static final String A4589190_PUBLIC_KEY =
+            "00239c97975a48b7a9500d30c71f4b6445e73d8b246a8d1a986bb493d50ef0c7";
+    private static final String A4589192_PUBLIC_KEY =
+            "96accd0d08b2a0883d5fa630e53ac8632da6578f1f049544e943bc281ae4e8ac";
+    private static final long MASTER_ID = 4589187L;
+    private static final long FEE_COLLECTOR_ID = 1234567L;
     private static final Key MASTER_KEY =
-            Key.newBuilder().ed25519(Bytes.fromHex(HEXED_PUBLIC_KEY)).build();
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589187_PUBLIC_KEY)).build();
+    private static final Map<Long, Key> WELL_KNOWN_KEYS = Map.of(
+            MASTER_ID,
+            MASTER_KEY,
+            4589188L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589188_PUBLIC_KEY)).build(),
+            4589189L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589189_PUBLIC_KEY)).build(),
+            4589190L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589190_PUBLIC_KEY)).build(),
+            4589192L,
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
     private static final int NUM_ACCOUNTS = 10;
     private static final int NUM_TOKENS = 10;
     private static final int NUM_TOPICS = 1;
-    private static final long INITIAL_BALANCE = 10 * 100_000_000L;
+    private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
 
     private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
 
     private void setupPlexAccounts(SystemContext systemContext) {
-        for (int i = 0; i < NUM_ACCOUNTS; i++) {
+        WELL_KNOWN_KEYS.forEach((id, key) -> {
             final var op = CryptoCreateTransactionBody.newBuilder()
-                    .key(MASTER_KEY)
+                    .key(key)
                     .maxAutomaticTokenAssociations(NUM_TOKENS)
                     .initialBalance(INITIAL_BALANCE)
                     .autoRenewPeriod(new Duration(7776000L))
                     .build();
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder().cryptoCreateAccount(op).build(), FIRST_ACCOUNT_NUM + i);
+                    TransactionBody.newBuilder().cryptoCreateAccount(op).build(), id);
+        });
+    }
+
+    private static final String FEE_COLLECTOR_INITCODE_LOC =
+            "/Users/michaeltinker/dev/lambdaplex/lambdaplex-contracts/build/LambdaplexFeeCollector.bin";
+
+    private void setupPlexFeeCollector(SystemContext systemContext) {
+        final byte[] initcode;
+        try {
+            initcode = Files.readAllBytes(Paths.get(FEE_COLLECTOR_INITCODE_LOC));
+            final var encoder = new HexMessageEncoder();
+            final var unhexedBytecode = encoder.decode(new String(initcode));
+            final var op = ContractCreateTransactionBody.newBuilder()
+                    .initcode(Bytes.wrap(unhexedBytecode))
+                    .autoRenewPeriod(new Duration(7776000L))
+                    .gas(1_000_000)
+                    .build();
+            systemContext.dispatchCreation(
+                    TransactionBody.newBuilder()
+                            .transactionID(TransactionID.newBuilder()
+                                    .accountID(AccountID.newBuilder().accountNum(MASTER_ID))
+                                    .build())
+                            .contractCreateInstance(op)
+                            .build(),
+                    FEE_COLLECTOR_ID);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
     private void setupPlexTokens(SystemContext systemContext) {
-        final var tokenTreasuryId =
-                AccountID.newBuilder().accountNum(FIRST_ACCOUNT_NUM).build();
+        final var tokenTreasuryId = AccountID.newBuilder().accountNum(MASTER_ID).build();
+        final var letters = "abcdefghij";
         for (int i = 0; i < NUM_TOKENS; i++) {
-            final var symbol = randomAlpha(3);
+            final var letter = letters.charAt(i);
             final var op = TokenCreateTransactionBody.newBuilder()
                     .supplyKey(MASTER_KEY)
                     .tokenType(FUNGIBLE_COMMON)
-                    .decimals(RANDOM.nextInt(10))
-                    .symbol(symbol)
-                    .name(symbol)
+                    .decimals(i == 3 ? 6 : RANDOM.nextInt(10))
+                    .symbol(i == 3 ? "USDC" : Strings.repeat("" + letter, 3))
+                    .name(i == 3 ? "US Dollar" : ("Token" + letter).toUpperCase())
                     .initialSupply(Long.MAX_VALUE)
                     .treasury(tokenTreasuryId)
                     .build();
@@ -383,14 +437,6 @@ public class SystemTransactions {
             systemContext.dispatchCreation(
                     TransactionBody.newBuilder().consensusCreateTopic(op).build(), FIRST_TOPIC_NUM + i);
         }
-    }
-
-    private String randomAlpha(int n) {
-        final StringBuilder sb = new StringBuilder(n);
-        for (int i = 0; i < n; i++) {
-            sb.append("ABCDEFGHIJKLMNOPQRSTUVWXYZ".charAt(RANDOM.nextInt(26)));
-        }
-        return sb.toString();
     }
     // </PLEX>
 
@@ -799,8 +845,12 @@ public class SystemTransactions {
                         .getWritableStates(EntityIdService.NAME)
                         .<EntityNumber>getSingleton(ENTITY_ID_STATE_KEY);
                 controlledNum.put(new EntityNumber(entityNum - 1));
-                final var recordBuilder = dispatch.handleContext()
-                        .dispatch(independentDispatch(systemAdminId, body, StreamBuilder.class));
+                final var payerId =
+                        body.hasTransactionID() && body.transactionIDOrThrow().hasAccountID()
+                                ? body.transactionIDOrThrow().accountIDOrThrow()
+                                : systemAdminId;
+                final var recordBuilder =
+                        dispatch.handleContext().dispatch(independentDispatch(payerId, body, StreamBuilder.class));
                 if (!SUCCESSES.contains(recordBuilder.status())) {
                     log.error(
                             "Failed to dispatch system create transaction {} for entity {} - {}",
