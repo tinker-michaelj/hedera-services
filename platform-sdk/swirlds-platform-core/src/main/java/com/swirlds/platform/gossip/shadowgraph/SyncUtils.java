@@ -1,29 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.platform.gossip.shadowgraph;
 
-import static com.swirlds.common.utility.CompareTo.isGreaterThan;
 import static com.swirlds.logging.legacy.LogMarker.SYNC_INFO;
+import static org.hiero.base.CompareTo.isGreaterThan;
 
 import com.hedera.hapi.platform.event.GossipEvent;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.common.io.streams.SerializableDataInputStream;
-import com.swirlds.common.io.streams.SerializableDataOutputStream;
-import com.swirlds.common.platform.NodeId;
-import com.swirlds.platform.consensus.EventWindow;
-import com.swirlds.platform.event.AncientMode;
-import com.swirlds.platform.event.PlatformEvent;
 import com.swirlds.platform.gossip.IntakeEventCounter;
 import com.swirlds.platform.gossip.SyncException;
 import com.swirlds.platform.metrics.SyncMetrics;
 import com.swirlds.platform.network.ByteConstants;
 import com.swirlds.platform.network.Connection;
-import com.swirlds.platform.system.events.EventDescriptorWrapper;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -40,6 +33,14 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.crypto.Hash;
+import org.hiero.base.io.streams.SerializableDataInputStream;
+import org.hiero.base.io.streams.SerializableDataOutputStream;
+import org.hiero.consensus.model.event.AncientMode;
+import org.hiero.consensus.model.event.EventDescriptorWrapper;
+import org.hiero.consensus.model.event.PlatformEvent;
+import org.hiero.consensus.model.hashgraph.EventWindow;
+import org.hiero.consensus.model.node.NodeId;
 
 /**
  * Various static utility method used in syncing
@@ -311,9 +312,9 @@ public final class SyncUtils {
                             // we are done reading event, tell the writer thread to send a COMM_SYNC_DONE
                             eventReadingDone.countDown();
                         }
-                            // while we are waiting for the peer to tell us they are done, they might send
-                            // COMM_SYNC_ONGOING
-                            // if they are still busy reading events
+                        // while we are waiting for the peer to tell us they are done, they might send
+                        // COMM_SYNC_ONGOING
+                        // if they are still busy reading events
                         case ByteConstants.COMM_SYNC_ONGOING -> {
                             // peer is still reading events, waiting for them to finish
                             if (logger.isDebugEnabled(SYNC_INFO.getMarker())) {
@@ -332,8 +333,10 @@ public final class SyncUtils {
                             }
                             return eventsRead;
                         }
-                        default -> throw new SyncException(
-                                connection, String.format("while reading events, received unexpected byte %02x", next));
+                        default ->
+                            throw new SyncException(
+                                    connection,
+                                    String.format("while reading events, received unexpected byte %02x", next));
                     }
                 }
             } finally {
@@ -462,9 +465,8 @@ public final class SyncUtils {
         // since those events may be unlinked and could cause race conditions if accessed.
 
         final long minimumSearchThreshold =
-                Math.max(myEventWindow.getExpiredThreshold(), theirEventWindow.getAncientThreshold());
-        return s ->
-                s.getEvent().getAncientIndicator(ancientMode) >= minimumSearchThreshold && !knownShadows.contains(s);
+                Math.max(myEventWindow.expiredThreshold(), theirEventWindow.ancientThreshold());
+        return s -> ancientMode.selectIndicator(s.getEvent()) >= minimumSearchThreshold && !knownShadows.contains(s);
     }
 
     /**
@@ -508,7 +510,7 @@ public final class SyncUtils {
     static void sort(@NonNull final List<PlatformEvent> sendList) {
         // Note: regardless of ancient mode, sorting uses generations and not birth rounds.
         //       Sorting by generations yields a list in topological order, sorting by birth rounds does not.
-        sendList.sort((PlatformEvent e1, PlatformEvent e2) -> (int) (e1.getGeneration() - e2.getGeneration()));
+        sendList.sort(Comparator.comparingLong(PlatformEvent::getNGen));
     }
 
     /**
@@ -575,9 +577,9 @@ public final class SyncUtils {
             @NonNull final SerializableDataOutputStream out, @NonNull final EventWindow eventWindow)
             throws IOException {
 
-        out.writeLong(eventWindow.getLatestConsensusRound());
-        out.writeLong(eventWindow.getAncientThreshold());
-        out.writeLong(eventWindow.getExpiredThreshold());
+        out.writeLong(eventWindow.latestConsensusRound());
+        out.writeLong(eventWindow.ancientThreshold());
+        out.writeLong(eventWindow.expiredThreshold());
 
         // Intentionally don't bother writing ancient mode, the peer will always be using the same ancient mode as us
     }
@@ -597,6 +599,12 @@ public final class SyncUtils {
         final long ancientThreshold = in.readLong();
         final long expiredThreshold = in.readLong();
 
-        return new EventWindow(latestConsensusRound, ancientThreshold, expiredThreshold, ancientMode);
+        return new EventWindow(
+                latestConsensusRound,
+                // by default, we set the birth round to the pending round
+                latestConsensusRound + 1,
+                ancientThreshold,
+                expiredThreshold,
+                ancientMode);
     }
 }

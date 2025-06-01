@@ -3,6 +3,7 @@ package com.hedera.node.app.workflows.handle;
 
 import static com.hedera.hapi.node.base.ResponseCodeEnum.UNRESOLVABLE_REQUIRED_SIGNERS;
 import static com.hedera.hapi.util.HapiUtils.functionOf;
+import static com.hedera.node.app.spi.workflows.HandleContext.TransactionCategory.BATCH_INNER;
 import static com.hedera.node.app.workflows.handle.stack.SavepointStackImpl.castBuilder;
 import static java.util.Collections.emptyMap;
 import static java.util.Objects.requireNonNull;
@@ -96,6 +97,7 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
     private Map<AccountID, Long> dispatchPaidRewards;
     private final DispatchMetadata dispatchMetaData;
     private final TransactionChecker transactionChecker;
+    private final TransactionCategory transactionCategory;
     // This is used to store the pre-handle results for the inner transactions
     // in an atomic batch, null otherwise
     @Nullable
@@ -126,7 +128,8 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
             @NonNull final FeeAccumulator feeAccumulator,
             @NonNull final DispatchMetadata handleMetaData,
             @NonNull final TransactionChecker transactionChecker,
-            @Nullable final List<PreHandleResult> preHandleResults) {
+            @Nullable final List<PreHandleResult> preHandleResults,
+            @NonNull final TransactionCategory transactionCategory) {
         this.consensusNow = requireNonNull(consensusNow);
         this.creatorInfo = requireNonNull(creatorInfo);
         this.txnInfo = requireNonNull(transactionInfo);
@@ -154,6 +157,7 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
         this.dispatchMetaData = requireNonNull(handleMetaData);
         this.transactionChecker = requireNonNull(transactionChecker);
         this.preHandleResults = preHandleResults;
+        this.transactionCategory = requireNonNull(transactionCategory);
     }
 
     @NonNull
@@ -175,8 +179,21 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
     }
 
     @Override
-    public boolean tryToChargePayer(final long amount) {
-        return feeAccumulator.chargeNetworkFee(payerId, amount, null);
+    public boolean tryToCharge(@NonNull final AccountID accountId, final long amount) {
+        requireNonNull(accountId);
+        if (amount < 0) {
+            throw new IllegalArgumentException("Cannot charge negative amount " + amount);
+        }
+        return feeAccumulator.chargeFee(accountId, amount, null).networkFee() == amount;
+    }
+
+    @Override
+    public void refundBestEffort(@NonNull final AccountID accountId, final long amount) {
+        requireNonNull(accountId);
+        if (amount < 0) {
+            throw new IllegalArgumentException("Cannot charge negative amount " + amount);
+        }
+        feeAccumulator.refundFee(accountId, amount);
     }
 
     @NonNull
@@ -267,7 +284,13 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
         final var nestedPureChecksContext = new PureChecksContextImpl(nestedTxn, dispatcher);
         dispatcher.dispatchPureChecks(nestedPureChecksContext);
         final var nestedContext = new PreHandleContextImpl(
-                storeFactory.asReadOnly(), nestedTxn, payerForNested, configuration(), dispatcher, transactionChecker);
+                storeFactory.asReadOnly(),
+                nestedTxn,
+                payerForNested,
+                configuration(),
+                dispatcher,
+                transactionChecker,
+                creatorInfo);
         try {
             dispatcher.dispatchPreHandle(nestedContext);
         } catch (final PreCheckException ignored) {
@@ -330,7 +353,11 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
                 computeDispatchFeesAsTopLevel == ComputeDispatchFeesAsTopLevel.NO,
                 authorizer,
                 storeFactory.asReadOnly(),
-                consensusNow));
+                consensusNow,
+                transactionCategory == TransactionCategory.BATCH_INNER ? verifier : null,
+                transactionCategory == TransactionCategory.BATCH_INNER
+                        ? txnInfo.signatureMap().sigPair().size()
+                        : 0));
     }
 
     @NonNull
@@ -355,7 +382,7 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
         PreHandleResult childPreHandleResult = null;
         // If we have pre-computed pre-handle results for the inner transactions, pass them to the child
         // dispatch instead of computing a synthetic pre-handle result for child dispatch.
-        if (preHandleResults != null && !preHandleResults.isEmpty()) {
+        if (options.category() == BATCH_INNER && preHandleResults != null && !preHandleResults.isEmpty()) {
             childPreHandleResult = preHandleResults.removeFirst();
         }
         final var childDispatch = childDispatchFactory.createChildDispatch(
@@ -371,17 +398,17 @@ public class DispatchHandleContext implements HandleContext, FeeContext {
                 childPreHandleResult);
         dispatchProcessor.processDispatch(childDispatch);
         if (options.commitImmediately()) {
-            stack.commitTransaction(childDispatch.recordBuilder());
+            stack.commitTransaction(childDispatch.streamBuilder());
         }
         // This can be non-empty for SCHEDULED dispatches, if rewards are paid for the triggered transaction
-        final var paidStakingRewards = childDispatch.recordBuilder().getPaidStakingRewards();
+        final var paidStakingRewards = childDispatch.streamBuilder().getPaidStakingRewards();
         if (!paidStakingRewards.isEmpty()) {
             if (dispatchPaidRewards == null) {
                 dispatchPaidRewards = new LinkedHashMap<>();
             }
             paidStakingRewards.forEach(aa -> dispatchPaidRewards.put(aa.accountIDOrThrow(), aa.amount()));
         }
-        return castBuilder(childDispatch.recordBuilder(), options.streamBuilderType());
+        return castBuilder(childDispatch.streamBuilder(), options.streamBuilderType());
     }
 
     @NonNull

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.hedera.services.bdd.spec.transactions.crypto;
 
-import static com.hedera.services.bdd.spec.PropertySource.asAccountString;
+import static com.hedera.services.bdd.spec.HapiPropertySource.asAccountString;
+import static com.hedera.services.bdd.spec.HapiPropertySource.asEntityString;
+import static com.hedera.services.bdd.spec.keys.SigMapGenerator.Nature.FULL_PREFIXES;
 import static com.hedera.services.bdd.spec.queries.QueryVerbs.getAccountInfo;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.asIdForKeyLookUp;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.defaultUpdateSigners;
+import static com.hedera.services.bdd.spec.transactions.TxnUtils.isIdLiteral;
 import static com.hedera.services.bdd.spec.transactions.TxnUtils.suFrom;
 import static com.hedera.services.bdd.spec.utilops.CustomSpecAssert.allRunFor;
 import static com.hederahashgraph.api.proto.java.ResponseCodeEnum.SUCCESS;
@@ -23,6 +26,7 @@ import com.hedera.services.bdd.spec.HapiPropertySource;
 import com.hedera.services.bdd.spec.HapiSpec;
 import com.hedera.services.bdd.spec.fees.AdapterUtils;
 import com.hedera.services.bdd.spec.fees.FeeCalculator;
+import com.hedera.services.bdd.spec.keys.TrieSigMapGenerator;
 import com.hedera.services.bdd.spec.queries.crypto.HapiGetAccountInfo;
 import com.hedera.services.bdd.spec.queries.crypto.ReferenceType;
 import com.hedera.services.bdd.spec.transactions.HapiTxnOp;
@@ -75,6 +79,7 @@ public class HapiCryptoUpdate extends HapiTxnOp<HapiCryptoUpdate> {
 
     public HapiCryptoUpdate(String account) {
         this.account = account;
+        sigMapPrefixes(TrieSigMapGenerator.withNature(FULL_PREFIXES));
     }
 
     public HapiCryptoUpdate(String reference, ReferenceType type) {
@@ -84,6 +89,7 @@ public class HapiCryptoUpdate extends HapiTxnOp<HapiCryptoUpdate> {
         } else {
             account = reference;
         }
+        sigMapPrefixes(TrieSigMapGenerator.withNature(FULL_PREFIXES));
     }
 
     public HapiCryptoUpdate withYahcliLogging() {
@@ -146,6 +152,10 @@ public class HapiCryptoUpdate extends HapiTxnOp<HapiCryptoUpdate> {
         return this;
     }
 
+    public HapiCryptoUpdate newStakedAccountId(long stakee) {
+        return newStakedAccountId(String.valueOf(stakee));
+    }
+
     public HapiCryptoUpdate newStakedAccountId(String stakee) {
         newStakee = Optional.of(stakee);
         return this;
@@ -185,7 +195,9 @@ public class HapiCryptoUpdate extends HapiTxnOp<HapiCryptoUpdate> {
         AccountID id;
 
         if (referenceType == ReferenceType.REGISTRY_NAME) {
-            id = TxnUtils.asId(account, spec);
+            final var maybeFqAcct =
+                    (account.matches("\\d+")) ? asEntityString(spec.shard(), spec.realm(), account) : account;
+            id = TxnUtils.asId(maybeFqAcct, spec);
         } else {
             id = asIdForKeyLookUp(aliasKeySource, spec);
             account = asAccountString(id);
@@ -221,7 +233,11 @@ public class HapiCryptoUpdate extends HapiTxnOp<HapiCryptoUpdate> {
                                     p -> builder.setMaxAutomaticTokenAssociations(Int32Value.of(p)));
 
                             if (newStakee.isPresent()) {
-                                builder.setStakedAccountId(TxnUtils.asId(newStakee.get(), spec));
+                                var newStakeeId = newStakee.get();
+                                if (!isIdLiteral(newStakeeId) && newStakeeId.matches("\\d+")) {
+                                    newStakeeId = asEntityString(spec.shard(), spec.realm(), newStakeeId);
+                                }
+                                builder.setStakedAccountId(TxnUtils.asId(newStakeeId, spec));
                             } else if (newStakedNodeId.isPresent()) {
                                 builder.setStakedNodeId(newStakedNodeId.get());
                             }

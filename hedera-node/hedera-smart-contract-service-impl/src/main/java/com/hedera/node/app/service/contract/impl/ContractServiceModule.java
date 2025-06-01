@@ -7,14 +7,18 @@ import static com.hedera.node.app.service.contract.impl.hevm.HederaEvmVersion.VE
 import static com.hedera.node.app.service.contract.impl.hevm.HederaEvmVersion.VERSION_046;
 import static com.hedera.node.app.service.contract.impl.hevm.HederaEvmVersion.VERSION_050;
 import static com.hedera.node.app.service.contract.impl.hevm.HederaEvmVersion.VERSION_051;
+import static com.hedera.node.app.service.contract.impl.hevm.HederaEvmVersion.VERSION_062;
+import static com.hedera.node.app.service.contract.impl.hevm.HederaOpsDuration.HEDERA_OPS_DURATION;
 import static org.hyperledger.besu.evm.internal.EvmConfiguration.WorldUpdaterMode.JOURNALED;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hedera.node.app.service.contract.impl.annotations.ServicesV030;
 import com.hedera.node.app.service.contract.impl.annotations.ServicesV034;
 import com.hedera.node.app.service.contract.impl.annotations.ServicesV038;
 import com.hedera.node.app.service.contract.impl.annotations.ServicesV046;
 import com.hedera.node.app.service.contract.impl.annotations.ServicesV050;
 import com.hedera.node.app.service.contract.impl.annotations.ServicesV051;
+import com.hedera.node.app.service.contract.impl.annotations.ServicesV062;
 import com.hedera.node.app.service.contract.impl.annotations.ServicesVersionKey;
 import com.hedera.node.app.service.contract.impl.exec.QueryComponent;
 import com.hedera.node.app.service.contract.impl.exec.TransactionComponent;
@@ -27,6 +31,7 @@ import com.hedera.node.app.service.contract.impl.exec.v038.V038Module;
 import com.hedera.node.app.service.contract.impl.exec.v046.V046Module;
 import com.hedera.node.app.service.contract.impl.exec.v050.V050Module;
 import com.hedera.node.app.service.contract.impl.exec.v051.V051Module;
+import com.hedera.node.app.service.contract.impl.exec.v062.V062Module;
 import com.hedera.node.app.service.contract.impl.handlers.ContractCallHandler;
 import com.hedera.node.app.service.contract.impl.handlers.ContractCallLocalHandler;
 import com.hedera.node.app.service.contract.impl.handlers.ContractCreateHandler;
@@ -42,6 +47,7 @@ import com.hedera.node.app.service.contract.impl.handlers.ContractUpdateHandler;
 import com.hedera.node.app.service.contract.impl.handlers.EthereumTransactionHandler;
 import com.hedera.node.app.service.contract.impl.handlers.EvmHookDispatchHandler;
 import com.hedera.node.app.service.contract.impl.handlers.LambdaSStoreHandler;
+import com.hedera.node.app.service.contract.impl.hevm.HederaOpsDuration;
 import dagger.Binds;
 import dagger.Module;
 import dagger.Provides;
@@ -66,6 +72,7 @@ import org.hyperledger.besu.evm.precompile.PrecompiledContract;
             V046Module.class,
             V050Module.class,
             V051Module.class,
+            V062Module.class,
             ProcessorModule.class
         },
         subcomponents = {TransactionComponent.class, QueryComponent.class})
@@ -124,6 +131,16 @@ public interface ContractServiceModule {
     @Singleton
     static EvmConfiguration provideEvmConfiguration() {
         return new EvmConfiguration(EvmConfiguration.DEFAULT.jumpDestCacheWeightKB(), JOURNALED);
+    }
+
+    @Provides
+    @Singleton
+    static HederaOpsDuration provideHederaOpsDuration() {
+        var hederaOpsDuration = new HederaOpsDuration(
+                () -> HederaOpsDuration.class.getClassLoader().getResourceAsStream(HEDERA_OPS_DURATION),
+                new ObjectMapper());
+        hederaOpsDuration.loadOpsDuration();
+        return hederaOpsDuration;
     }
 
     /**
@@ -185,4 +202,14 @@ public interface ContractServiceModule {
     @Singleton
     @ServicesVersionKey(VERSION_051)
     TransactionProcessor bindV051Processor(@ServicesV051 @NonNull final TransactionProcessor processor);
+
+    /**
+     * @param processor the transaction processor
+     * @return the bound transaction processor for version 0.62
+     */
+    @Binds
+    @IntoMap
+    @Singleton
+    @ServicesVersionKey(VERSION_062)
+    TransactionProcessor bindV062Processor(@ServicesV062 @NonNull final TransactionProcessor processor);
 }

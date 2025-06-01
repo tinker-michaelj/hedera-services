@@ -3,25 +3,27 @@ package com.swirlds.platform.system.address;
 
 import static com.swirlds.platform.util.BootstrapUtils.detectSoftwareUpgrade;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.node.base.ServiceEndpoint;
 import com.hedera.hapi.node.state.roster.Roster;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
 import com.swirlds.common.context.PlatformContext;
 import com.swirlds.common.formatting.TextTable;
-import com.swirlds.common.platform.NodeId;
-import com.swirlds.platform.roster.RosterRetriever;
-import com.swirlds.platform.roster.RosterUtils;
-import com.swirlds.platform.state.StateLifecycles;
+import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.state.address.AddressBookInitializer;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.ReservedSignedState;
-import com.swirlds.platform.system.SoftwareVersion;
 import com.swirlds.state.State;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.text.ParseException;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.roster.Address;
+import org.hiero.consensus.model.roster.AddressBook;
+import org.hiero.consensus.roster.RosterRetriever;
+import org.hiero.consensus.roster.RosterUtils;
 
 /**
  * A utility class for AddressBook functionality.
@@ -230,22 +232,21 @@ public class AddressBookUtils {
      */
     public static @NonNull AddressBook initializeAddressBook(
             @NonNull final NodeId selfId,
-            @NonNull final SoftwareVersion version,
+            @NonNull final SemanticVersion version,
             @NonNull final ReservedSignedState initialState,
             @NonNull final AddressBook bootstrapAddressBook,
             @NonNull final PlatformContext platformContext,
-            @NonNull final StateLifecycles<?> stateLifecycles,
+            @NonNull final ConsensusStateEventHandler<?> consensusStateEventHandler,
             @NonNull final PlatformStateFacade platformStateFacade) {
         final boolean softwareUpgrade = detectSoftwareUpgrade(version, initialState.get(), platformStateFacade);
         // Initialize the address book from the configuration and platform saved state.
         final AddressBookInitializer addressBookInitializer = new AddressBookInitializer(
                 selfId,
-                version,
                 softwareUpgrade,
                 initialState.get(),
                 bootstrapAddressBook.copy(),
                 platformContext,
-                stateLifecycles,
+                consensusStateEventHandler,
                 platformStateFacade);
         final State state = initialState.get().getState();
 
@@ -258,29 +259,32 @@ public class AddressBookUtils {
                 // we might as well validate this fact here just to ensure the update is correct.
                 final Roster previousRoster =
                         RosterRetriever.buildRoster(addressBookInitializer.getPreviousAddressBook());
-                if (!previousRoster.equals(RosterRetriever.retrieveActiveOrGenesisRoster(state, platformStateFacade))
-                        && !previousRoster.equals(RosterRetriever.retrievePreviousRoster(state, platformStateFacade))) {
+                final long round = platformStateFacade.roundOf(state);
+                if (!previousRoster.equals(RosterRetriever.retrieveActive(state, round))
+                        && !previousRoster.equals(RosterRetriever.retrievePreviousRoster(state))) {
                     throw new IllegalStateException(
                             "The previousRoster in the AddressBookInitializer doesn't match either the active or previous roster in state."
                                     + " AddressBookInitializer previousRoster = " + RosterUtils.toString(previousRoster)
                                     + ", state currentRoster = "
-                                    + RosterUtils.toString(
-                                            RosterRetriever.retrieveActiveOrGenesisRoster(state, platformStateFacade))
+                                    + RosterUtils.toString(RosterRetriever.retrieveActive(state, round))
                                     + ", state previousRoster = "
-                                    + RosterUtils.toString(
-                                            RosterRetriever.retrievePreviousRoster(state, platformStateFacade)));
+                                    + RosterUtils.toString(RosterRetriever.retrievePreviousRoster(state)));
                 }
             }
 
-            RosterUtils.setActiveRoster(
-                    state,
-                    RosterRetriever.buildRoster(addressBookInitializer.getCurrentAddressBook()),
-                    platformStateFacade.roundOf(state));
+            // The active roster is already initialized when creating a genesis state, so only set it here
+            // if it's not for the genesis state (round 0)
+            if (initialState.get().getRound() > 0) {
+                RosterUtils.setActiveRoster(
+                        state,
+                        RosterRetriever.buildRoster(addressBookInitializer.getCurrentAddressBook()),
+                        platformStateFacade.roundOf(state));
+            }
         }
 
         // At this point the initial state must have the current address book set.  If not, something is wrong.
-        final AddressBook addressBook =
-                RosterUtils.buildAddressBook(RosterRetriever.retrieveActiveOrGenesisRoster(state, platformStateFacade));
+        final long round = platformStateFacade.roundOf(state);
+        final AddressBook addressBook = RosterUtils.buildAddressBook(RosterRetriever.retrieveActive(state, round));
         if (addressBook == null) {
             throw new IllegalStateException("The current address book of the initial state is null.");
         }
@@ -289,21 +293,21 @@ public class AddressBookUtils {
 
     /**
      * Format a "consensusEventStreamName" using the "memo" field from the self-Address.
-     *
+     * <p>
      * !!! IMPORTANT !!!: It's imperative to retain the logic that is based on the current content of the "memo" field,
-     * even if the code is updated to source the content of "memo" from another place. The "consensusEventStreamName" is used
-     * as a directory name to save some files on disk, and the directory name should remain unchanged for now.
+     * even if the code is updated to source the content of "memo" from another place. The "consensusEventStreamName" is
+     * used as a directory name to save some files on disk, and the directory name should remain unchanged for now.
      * <p>
-     * Per @lpetrovic05 : "As far as I know, CES isn't really used for anything.
-     * It is however, uploaded to google storage, so maybe the name change might affect the uploader."
+     * Per @lpetrovic05 : "As far as I know, CES isn't really used for anything. It is however, uploaded to google
+     * storage, so maybe the name change might affect the uploader."
      * <p>
-     * This logic could and should eventually change to use the nodeId only (see the else{} branch below.)
-     * However, this change needs to be coordinated with DevOps and NodeOps to ensure the data continues to be uploaded.
-     * Replacing the directory and starting with an empty one may or may not affect the DefaultConsensusEventStream
-     * which will need to be tested when this change takes place.
+     * This logic could and should eventually change to use the nodeId only (see the else{} branch below.) However, this
+     * change needs to be coordinated with DevOps and NodeOps to ensure the data continues to be uploaded. Replacing the
+     * directory and starting with an empty one may or may not affect the DefaultConsensusEventStream which will need to
+     * be tested when this change takes place.
      *
      * @param addressBook an AddressBook
-     * @param selfId a NodeId for self
+     * @param selfId      a NodeId for self
      * @return consensusEventStreamName
      */
     @NonNull

@@ -64,11 +64,14 @@ class BlockImplUtilsTest {
     }
 
     public static Stream<Arguments> stateIdsByName() {
-        return Arrays.stream(StateIdentifier.values()).map(stateId -> Arguments.of(nameOf(stateId), stateId));
+        return Arrays.stream(StateIdentifier.values())
+                .filter(v -> v != StateIdentifier.UNKNOWN)
+                .map(stateId -> Arguments.of(nameOf(stateId), stateId));
     }
 
     private static String nameOf(@NonNull final StateIdentifier stateId) {
         return switch (stateId) {
+            case UNKNOWN -> throw new IllegalArgumentException("Unknown state identifier");
             case STATE_ID_NODES -> "AddressBookService.NODES";
             case STATE_ID_BLOCK_INFO -> "BlockRecordService.BLOCKS";
             case STATE_ID_RUNNING_HASHES -> "BlockRecordService.RUNNING_HASHES";
@@ -91,7 +94,6 @@ class BlockImplUtilsTest {
             case STATE_ID_UPGRADE_DATA_157 -> "FileService.UPGRADE_DATA[FileID[shardNum=0, realmNum=0, fileNum=157]]";
             case STATE_ID_UPGRADE_DATA_158 -> "FileService.UPGRADE_DATA[FileID[shardNum=0, realmNum=0, fileNum=158]]";
             case STATE_ID_UPGRADE_DATA_159 -> "FileService.UPGRADE_DATA[FileID[shardNum=0, realmNum=0, fileNum=159]]";
-            case STATE_ID_UPGRADE_FILE -> "FileService.UPGRADE_FILE";
             case STATE_ID_FREEZE_TIME -> "FreezeService.FREEZE_TIME";
             case STATE_ID_UPGRADE_FILE_HASH -> "FreezeService.UPGRADE_FILE_HASH";
             case STATE_ID_PLATFORM_STATE -> "PlatformStateService.PLATFORM_STATE";
@@ -118,8 +120,8 @@ class BlockImplUtilsTest {
             case STATE_ID_TSS_ENCRYPTION_KEYS -> "TssBaseService.TSS_ENCRYPTION_KEYS";
             case STATE_ID_TSS_STATUS -> "TssBaseService.TSS_STATUS";
             case STATE_ID_HINTS_KEY_SETS -> "HintsService.HINTS_KEY_SETS";
-            case STATE_ID_ACTIVE_HINTS_CONSTRUCTION -> "HintsService.ACTIVE_HINTS_CONSTRUCTION";
-            case STATE_ID_NEXT_HINTS_CONSTRUCTION -> "HintsService.NEXT_HINTS_CONSTRUCTION";
+            case STATE_ID_ACTIVE_HINTS_CONSTRUCTION -> "HintsService.ACTIVE_HINT_CONSTRUCTION";
+            case STATE_ID_NEXT_HINTS_CONSTRUCTION -> "HintsService.NEXT_HINT_CONSTRUCTION";
             case STATE_ID_PREPROCESSING_VOTES -> "HintsService.PREPROCESSING_VOTES";
             case STATE_ID_ENTITY_COUNTS -> "EntityIdService.ENTITY_COUNTS";
             case STATE_ID_LEDGER_ID -> "HistoryService.LEDGER_ID";
@@ -130,6 +132,7 @@ class BlockImplUtilsTest {
             case STATE_ID_PROOF_VOTES -> "HistoryService.PROOF_VOTES";
             case STATE_ID_CRS_STATE -> "HintsService.CRS_STATE";
             case STATE_ID_CRS_PUBLICATIONS -> "HintsService.CRS_PUBLICATIONS";
+            case STATE_ID_NODE_REWARDS -> "TokenService.NODE_REWARDS";
         };
     }
 }

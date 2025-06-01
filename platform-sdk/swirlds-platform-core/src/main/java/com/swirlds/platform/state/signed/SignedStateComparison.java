@@ -3,8 +3,6 @@ package com.swirlds.platform.state.signed;
 
 import static com.swirlds.common.merkle.iterators.MerkleIterationOrder.PRE_ORDERED_DEPTH_FIRST;
 
-import com.swirlds.common.crypto.CryptographyFactory;
-import com.swirlds.common.crypto.Hash;
 import com.swirlds.common.formatting.TextTable;
 import com.swirlds.common.merkle.MerkleInternal;
 import com.swirlds.common.merkle.MerkleNode;
@@ -16,14 +14,13 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import org.hiero.base.crypto.Cryptography;
+import org.hiero.base.crypto.Hash;
 
 /**
  * Utilities for comparing states.
  */
 public final class SignedStateComparison {
-
-    private static final Hash NULL_HASH = CryptographyFactory.create().getNullHash();
-
     private SignedStateComparison() {}
 
     /**
@@ -38,7 +35,7 @@ public final class SignedStateComparison {
             }
             return hash;
         } else {
-            return NULL_HASH;
+            return Cryptography.NULL_HASH;
         }
     }
 

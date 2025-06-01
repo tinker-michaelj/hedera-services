@@ -24,6 +24,7 @@ import static com.hedera.services.bdd.suites.HapiSuite.NODE;
 import static com.hedera.services.bdd.suites.HapiSuite.NODE_REWARD;
 import static com.hedera.services.bdd.suites.HapiSuite.STAKING_REWARD;
 import static com.hedera.services.bdd.suites.HapiSuite.flattened;
+import static com.hedera.services.bdd.suites.contract.Utils.asSolidityAddress;
 import static java.util.function.Function.identity;
 
 import com.esaulpaugh.headlong.abi.Tuple;
@@ -110,9 +111,8 @@ public class ContractRecordsSanityCheckSuite {
                                         contractName + suffix,
                                         SET_NODES_ABI,
                                         spec -> Tuple.singleton(Stream.of(altruists)
-                                                .map(a -> BigInteger.valueOf(spec.registry()
-                                                        .getContractId(contractName + a)
-                                                        .getContractNum()))
+                                                .map(a -> new BigInteger(asSolidityAddress(
+                                                        spec.registry().getContractId(contractName + a))))
                                                 .toArray(BigInteger[]::new)))
                                 .gas(120_000)
                                 .via("txnFor" + contractName + suffix)
@@ -173,7 +173,7 @@ public class ContractRecordsSanityCheckSuite {
 
     private static final String SET_NODES_ABI =
             "{ \"constant\": false, \"inputs\": [ { \"internalType\": \"uint64[]\", \"name\":"
-                    + " \"accounts\", \"type\": \"uint64[]\" }     ], \"name\": \"setNodes\","
+                    + " \"accounts\", \"type\": \"uint160[]\" }     ], \"name\": \"setNodes\","
                     + " \"outputs\": [], \"payable\": true, \"stateMutability\": \"payable\", \"type\":"
                     + " \"function\" }";
 

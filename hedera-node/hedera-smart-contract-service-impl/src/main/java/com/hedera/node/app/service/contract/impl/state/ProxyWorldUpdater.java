@@ -186,15 +186,15 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
     }
 
     @Override
-    public void collectFee(@NonNull final AccountID payerId, final long amount) {
+    public void collectGasFee(@NonNull final AccountID payerId, final long amount, final boolean withNonceIncrement) {
         requireNonNull(payerId);
-        enhancement.operations().collectFee(payerId, amount);
+        enhancement.operations().collectGasFee(payerId, amount, withNonceIncrement);
     }
 
     @Override
-    public void refundFee(@NonNull final AccountID payerId, final long amount) {
+    public void refundGasFee(@NonNull final AccountID payerId, final long amount) {
         requireNonNull(payerId);
-        enhancement.operations().refundFee(payerId, amount);
+        enhancement.operations().refundGasFee(payerId, amount);
     }
 
     /**
@@ -299,6 +299,16 @@ public class ProxyWorldUpdater implements HederaWorldUpdater {
             @NonNull final Address deleted, @NonNull final Address beneficiary, @NonNull final MessageFrame frame) {
         return evmFrameState.tryTrackingSelfDestructBeneficiary(deleted, beneficiary, frame);
     }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void trackSelfDestructBeneficiary(
+            @NonNull final Address deleted, @NonNull final Address beneficiary, @NonNull final MessageFrame frame) {
+        evmFrameState.trackSelfDestructBeneficiary(deleted, beneficiary, frame);
+    }
+    ;
 
     /**
      * {@inheritDoc}

@@ -3,18 +3,13 @@ package com.swirlds.platform.crypto;
 
 import static com.swirlds.logging.legacy.LogMarker.ERROR;
 import static com.swirlds.logging.legacy.LogMarker.STARTUP;
-import static com.swirlds.platform.crypto.CryptoConstants.PUBLIC_KEYS_FILE;
 import static com.swirlds.platform.crypto.CryptoStatic.copyPublicKeys;
 import static com.swirlds.platform.crypto.CryptoStatic.createEmptyTrustStore;
 import static com.swirlds.platform.crypto.CryptoStatic.loadKeys;
+import static org.hiero.consensus.crypto.CryptoConstants.PUBLIC_KEYS_FILE;
 
-import com.swirlds.common.crypto.config.CryptoConfig;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.platform.config.PathsConfig;
-import com.swirlds.platform.roster.RosterUtils;
-import com.swirlds.platform.system.address.Address;
-import com.swirlds.platform.system.address.AddressBook;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.io.File;
@@ -48,6 +43,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -69,6 +65,12 @@ import org.bouncycastle.pkcs.PKCSException;
 import org.bouncycastle.util.encoders.DecoderException;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
+import org.hiero.base.crypto.config.CryptoConfig;
+import org.hiero.consensus.model.node.KeysAndCerts;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.roster.Address;
+import org.hiero.consensus.model.roster.AddressBook;
+import org.hiero.consensus.roster.RosterUtils;
 
 /**
  * This class is responsible for loading the key stores for all nodes in the address book.
@@ -308,7 +310,7 @@ public class EnhancedKeyStoreLoader {
             if (!agrPrivateKeys.containsKey(nodeId)) {
                 logger.info(STARTUP.getMarker(), "Generating agreement key pair for local nodeId {}", nodeId);
                 // Generate a new agreement key since it does not exist
-                final KeyPair agrKeyPair = KeysAndCerts.generateAgreementKeyPair();
+                final KeyPair agrKeyPair = KeysAndCertsGenerator.generateAgreementKeyPair();
                 agrPrivateKeys.put(nodeId, agrKeyPair.getPrivate());
 
                 // recover signing key pair to be root of trust on agreement certificate
@@ -459,7 +461,7 @@ public class EnhancedKeyStoreLoader {
 
                 final KeyPair sigKeyPair = new KeyPair(sigCert.getPublicKey(), sigPrivateKey);
                 final KeyPair agrKeyPair = new KeyPair(agrCert.getPublicKey(), agrPrivateKey);
-                final KeysAndCerts kc = new KeysAndCerts(sigKeyPair, agrKeyPair, sigCert, agrCert, publicStores);
+                final KeysAndCerts kc = new KeysAndCerts(sigKeyPair, agrKeyPair, sigCert, agrCert);
 
                 keysAndCerts.put(nodeId, kc);
             }
@@ -965,10 +967,11 @@ public class EnhancedKeyStoreLoader {
             return switch (entry) {
                 case SubjectPublicKeyInfo spki -> converter.getPublicKey(spki);
                 case PEMKeyPair kp -> converter.getPublicKey(kp.getPublicKeyInfo());
-                case PEMEncryptedKeyPair ekp -> converter.getPublicKey(
-                        ekp.decryptKeyPair(decrypter).getPublicKeyInfo());
-                default -> throw new KeyLoadingException("Unsupported entry type [ entryType = %s ]"
-                        .formatted(entry.getClass().getName()));
+                case PEMEncryptedKeyPair ekp ->
+                    converter.getPublicKey(ekp.decryptKeyPair(decrypter).getPublicKeyInfo());
+                default ->
+                    throw new KeyLoadingException("Unsupported entry type [ entryType = %s ]"
+                            .formatted(entry.getClass().getName()));
             };
         } catch (IOException e) {
             throw new KeyLoadingException(
@@ -1000,13 +1003,14 @@ public class EnhancedKeyStoreLoader {
 
             return switch (entry) {
                 case PrivateKeyInfo pki -> converter.getPrivateKey(pki);
-                case PKCS8EncryptedPrivateKeyInfo epki -> converter.getPrivateKey(
-                        epki.decryptPrivateKeyInfo(inputDecrypter));
+                case PKCS8EncryptedPrivateKeyInfo epki ->
+                    converter.getPrivateKey(epki.decryptPrivateKeyInfo(inputDecrypter));
                 case PEMKeyPair kp -> converter.getPrivateKey(kp.getPrivateKeyInfo());
-                case PEMEncryptedKeyPair ekp -> converter.getPrivateKey(
-                        ekp.decryptKeyPair(decrypter).getPrivateKeyInfo());
-                default -> throw new KeyLoadingException("Unsupported entry type [ entryType = %s ]"
-                        .formatted(entry.getClass().getName()));
+                case PEMEncryptedKeyPair ekp ->
+                    converter.getPrivateKey(ekp.decryptKeyPair(decrypter).getPrivateKeyInfo());
+                default ->
+                    throw new KeyLoadingException("Unsupported entry type [ entryType = %s ]"
+                            .formatted(entry.getClass().getName()));
             };
         } catch (IOException | PKCSException e) {
             throw new KeyLoadingException(
@@ -1204,7 +1208,7 @@ public class EnhancedKeyStoreLoader {
                         String.format("s-private-%s.pem", RosterUtils.formatNodeName(nodeId)));
                 final Path ksLocation = legacyPrivateKeyStore(nodeId);
                 if (!Files.exists(sPrivateKeyLocation) && Files.exists(ksLocation)) {
-                    logger.trace(
+                    logger.info(
                             STARTUP.getMarker(),
                             "Extracting private signing key for nodeId: {} from file {}",
                             nodeId,
@@ -1220,7 +1224,7 @@ public class EnhancedKeyStoreLoader {
                                 ksLocation.getFileName());
                         errorCount.incrementAndGet();
                     } else {
-                        logger.trace(
+                        logger.info(
                                 STARTUP.getMarker(),
                                 "Writing private signing key for nodeId: {} to PEM file {}",
                                 nodeId,
@@ -1244,7 +1248,7 @@ public class EnhancedKeyStoreLoader {
                     keyStoreDirectory.resolve(String.format("s-public-%s.pem", RosterUtils.formatNodeName(nodeId)));
             final Path ksLocation = legacyCertificateStore();
             if (!Files.exists(sCertificateLocation) && Files.exists(ksLocation)) {
-                logger.trace(
+                logger.info(
                         STARTUP.getMarker(),
                         "Extracting signing certificate for nodeId: {} from file {} ",
                         nodeId,
@@ -1260,7 +1264,7 @@ public class EnhancedKeyStoreLoader {
                             ksLocation.getFileName());
                     errorCount.incrementAndGet();
                 } else {
-                    logger.trace(
+                    logger.info(
                             STARTUP.getMarker(),
                             "Writing signing certificate for nodeId: {} to PEM file {}",
                             nodeId,
@@ -1382,6 +1386,18 @@ public class EnhancedKeyStoreLoader {
      */
     private void cleanupByMovingPfxFilesToSubDirectory() throws KeyStoreException, KeyLoadingException {
         final AtomicLong cleanupErrorCount = new AtomicLong(0);
+        final AtomicBoolean doCleanup = new AtomicBoolean(false);
+        iterateAddressBook(addressBook, (nodeId, address) -> {
+            if (localNodes.contains(nodeId)) {
+                // move private key PFX files per local node
+                final File sPrivatePfx = legacyPrivateKeyStore(nodeId).toFile();
+                if (sPrivatePfx.exists() && sPrivatePfx.isFile()) {
+                    doCleanup.set(true);
+                }
+            }
+        });
+
+        if (!doCleanup.get()) return;
 
         final String archiveDirectory = ".archive";
         final String now = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss").format(LocalDateTime.now());
@@ -1390,7 +1406,6 @@ public class EnhancedKeyStoreLoader {
         final Path pfxDateDirectory = pfxArchiveDirectory.resolve(now);
 
         logger.info(STARTUP.getMarker(), "Cryptography Migration Cleanup: Moving PFX files to {}", pfxDateDirectory);
-
         if (!Files.exists(pfxDateDirectory)) {
             try {
                 if (!Files.exists(pfxArchiveDirectory)) {
@@ -1443,7 +1458,7 @@ public class EnhancedKeyStoreLoader {
      * @param encoded      the byte encoded data to write to the PEM file.
      * @throws IOException if an error occurred while writing the PEM file.
      */
-    private static void writePemFile(
+    public static void writePemFile(
             final boolean isPrivateKey, @NonNull final Path location, @NonNull final byte[] encoded)
             throws IOException {
         final PemObject pemObj = new PemObject(isPrivateKey ? "PRIVATE KEY" : "CERTIFICATE", encoded);

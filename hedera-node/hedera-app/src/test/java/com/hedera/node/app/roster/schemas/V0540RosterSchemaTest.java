@@ -4,37 +4,30 @@ package com.hedera.node.app.roster.schemas;
 import static com.hedera.node.app.fixtures.AppTestBase.DEFAULT_CONFIG;
 import static com.hedera.node.app.roster.schemas.V0540RosterSchema.ROSTER_KEY;
 import static com.hedera.node.app.roster.schemas.V0540RosterSchema.ROSTER_STATES_KEY;
-import static com.swirlds.platform.roster.RosterRetriever.buildRoster;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.hedera.hapi.node.state.roster.Roster;
 import com.hedera.hapi.node.state.roster.RosterEntry;
-import com.hedera.hapi.node.state.roster.RosterState;
 import com.hedera.node.internal.network.Network;
 import com.hedera.node.internal.network.NodeMetadata;
-import com.swirlds.common.RosterStateId;
 import com.swirlds.platform.state.service.PlatformStateFacade;
-import com.swirlds.platform.state.service.WritableRosterStore;
-import com.swirlds.platform.system.address.AddressBook;
 import com.swirlds.state.State;
 import com.swirlds.state.lifecycle.MigrationContext;
 import com.swirlds.state.lifecycle.StartupNetworks;
 import com.swirlds.state.lifecycle.StateDefinition;
-import com.swirlds.state.spi.ReadableSingletonState;
-import com.swirlds.state.spi.ReadableStates;
 import com.swirlds.state.spi.WritableStates;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import org.hiero.consensus.roster.WritableRosterStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,7 +48,6 @@ class V0540RosterSchemaTest {
     private static final Roster ROSTER = new Roster(NETWORK.nodeMetadata().stream()
             .map(NodeMetadata::rosterEntryOrThrow)
             .toList());
-    private static final AddressBook ADDRESS_BOOK = new AddressBook(List.of());
 
     @Mock
     private MigrationContext ctx;
@@ -73,7 +65,7 @@ class V0540RosterSchemaTest {
     private Function<WritableStates, WritableRosterStore> rosterStoreFactory;
 
     @Mock
-    private Runnable onAdopt;
+    private BiConsumer<Roster, Roster> onAdopt;
 
     @Mock
     private Predicate<Roster> canAdopt;
@@ -120,39 +112,12 @@ class V0540RosterSchemaTest {
     }
 
     @Test
-    void usesAdaptedAddressBookAndMigrationRosterIfLifecycleEnabledIfApropos() {
-        given(ctx.newStates()).willReturn(writableStates);
-        given(ctx.startupNetworks()).willReturn(startupNetworks);
-        given(ctx.roundNumber()).willReturn(ROUND_NO);
-        given(startupNetworks.migrationNetworkOrThrow(any())).willReturn(NETWORK);
-
-        // Setup PlatformService states to return a given ADDRESS_BOOK,
-        // and the readable RosterService states to be empty:
-        when(platformStateFacade.roundOf(state)).thenReturn(ROUND_NO);
-        when(platformStateFacade.addressBookOf(state)).thenReturn(ADDRESS_BOOK);
-        final ReadableStates rosterReadableStates = mock(ReadableStates.class);
-        doReturn(rosterReadableStates).when(state).getReadableStates(RosterStateId.NAME);
-        final ReadableSingletonState<RosterState> rosterStateSingleton = mock(ReadableSingletonState.class);
-        doReturn(rosterStateSingleton).when(rosterReadableStates).getSingleton(RosterStateId.ROSTER_STATES_KEY);
-        final RosterState rosterState = mock(RosterState.class);
-        doReturn(rosterState).when(rosterStateSingleton).get();
-        doReturn(List.of()).when(rosterState).roundRosterPairs();
-
-        // This is the rosterStore for when the code updates it and writes to it upon the migration:
-        given(rosterStoreFactory.apply(writableStates)).willReturn(rosterStore);
-
-        subject.restart(ctx);
-
-        verify(rosterStore).putActiveRoster(buildRoster(ADDRESS_BOOK), 0L);
-        verify(rosterStore).putActiveRoster(ROSTER, ROUND_NO + 1L);
-    }
-
-    @Test
     void noOpIfNotUpgradeAndActiveRosterPresent() {
         given(ctx.newStates()).willReturn(writableStates);
         given(ctx.startupNetworks()).willReturn(startupNetworks);
         given(rosterStoreFactory.apply(writableStates)).willReturn(rosterStore);
         given(rosterStore.getActiveRoster()).willReturn(ROSTER);
+        given(ctx.appConfig()).willReturn(DEFAULT_CONFIG);
 
         subject.restart(ctx);
 
@@ -166,7 +131,8 @@ class V0540RosterSchemaTest {
         given(ctx.startupNetworks()).willReturn(startupNetworks);
         given(rosterStoreFactory.apply(writableStates)).willReturn(rosterStore);
         given(rosterStore.getActiveRoster()).willReturn(ROSTER);
-        given(ctx.isUpgrade(any(), any())).willReturn(true);
+        given(ctx.isUpgrade(any())).willReturn(true);
+        given(ctx.appConfig()).willReturn(DEFAULT_CONFIG);
 
         subject.restart(ctx);
 
@@ -181,9 +147,10 @@ class V0540RosterSchemaTest {
         given(ctx.startupNetworks()).willReturn(startupNetworks);
         given(rosterStoreFactory.apply(writableStates)).willReturn(rosterStore);
         given(rosterStore.getActiveRoster()).willReturn(ROSTER);
-        given(ctx.isUpgrade(any(), any())).willReturn(true);
+        given(ctx.isUpgrade(any())).willReturn(true);
         given(rosterStore.getCandidateRoster()).willReturn(ROSTER);
         given(canAdopt.test(ROSTER)).willReturn(false);
+        given(ctx.appConfig()).willReturn(DEFAULT_CONFIG);
 
         subject.restart(ctx);
 
@@ -198,14 +165,15 @@ class V0540RosterSchemaTest {
         given(ctx.startupNetworks()).willReturn(startupNetworks);
         given(rosterStoreFactory.apply(writableStates)).willReturn(rosterStore);
         given(rosterStore.getActiveRoster()).willReturn(ROSTER);
-        given(ctx.isUpgrade(any(), any())).willReturn(true);
+        given(ctx.isUpgrade(any())).willReturn(true);
         given(rosterStore.getCandidateRoster()).willReturn(ROSTER);
         given(canAdopt.test(ROSTER)).willReturn(true);
         given(ctx.roundNumber()).willReturn(ROUND_NO);
+        given(ctx.appConfig()).willReturn(DEFAULT_CONFIG);
 
         subject.restart(ctx);
 
-        verify(rosterStore).getActiveRoster();
+        verify(rosterStore, times(2)).getActiveRoster();
         verify(rosterStore).getCandidateRoster();
         verify(rosterStore).adoptCandidateRoster(ROUND_NO + 1L);
     }
@@ -219,11 +187,13 @@ class V0540RosterSchemaTest {
         given(rosterStoreFactory.apply(writableStates)).willReturn(rosterStore);
         given(ctx.platformConfig()).willReturn(DEFAULT_CONFIG);
         given(startupNetworks.overrideNetworkFor(ROUND_NO, DEFAULT_CONFIG)).willReturn(Optional.of(NETWORK));
+        given(rosterStore.getActiveRoster()).willReturn(ROSTER);
 
         subject.restart(ctx);
 
         verify(rosterStore).putActiveRoster(ROSTER, ROUND_NO + 1L);
         verify(startupNetworks).setOverrideRound(ROUND_NO);
+        verify(onAdopt).accept(ROSTER, ROSTER);
     }
 
     @Test
@@ -240,6 +210,7 @@ class V0540RosterSchemaTest {
         given(startupNetworks.overrideNetworkFor(ROUND_NO, DEFAULT_CONFIG)).willReturn(Optional.of(NETWORK));
         final var adaptedRoster = new Roster(
                 List.of(RosterEntry.newBuilder().nodeId(1L).weight(42L).build()));
+        given(rosterStore.getActiveRoster()).willReturn(adaptedRoster);
 
         subject.restart(ctx);
 

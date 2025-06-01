@@ -43,7 +43,6 @@ import com.hedera.node.app.spi.workflows.InsufficientBalanceException;
 import com.hedera.node.app.spi.workflows.PreCheckException;
 import com.hedera.node.app.store.ReadableStoreFactory;
 import com.hedera.node.app.validation.ExpiryValidation;
-import com.hedera.node.app.version.ServicesSoftwareVersion;
 import com.hedera.node.app.workflows.SolvencyPreCheck;
 import com.hedera.node.app.workflows.TransactionChecker;
 import com.hedera.node.app.workflows.TransactionInfo;
@@ -51,6 +50,7 @@ import com.hedera.node.app.workflows.dispatcher.TransactionDispatcher;
 import com.hedera.node.config.testfixtures.HederaTestConfigBuilder;
 import com.swirlds.config.api.Configuration;
 import java.time.Instant;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -100,6 +100,13 @@ class QueryCheckerTest extends AppTestBase {
                 feeManager,
                 dispatcher,
                 transactionChecker);
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (state != null) {
+            state.release();
+        }
     }
 
     @SuppressWarnings("ConstantConditions")
@@ -260,7 +267,7 @@ class QueryCheckerTest extends AppTestBase {
         void setup() {
             setupStandardStates();
 
-            final var storeFactory = new ReadableStoreFactory(state, ServicesSoftwareVersion::new);
+            final var storeFactory = new ReadableStoreFactory(state);
             store = storeFactory.getStore(ReadableAccountStore.class);
         }
 

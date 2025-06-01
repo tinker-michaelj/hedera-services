@@ -150,45 +150,48 @@ public record EthTxData(
             throw new IllegalStateException("Re-encoding access list is unsupported");
         }
         return switch (type) {
-            case LEGACY_ETHEREUM -> RLPEncoder.list(
-                    Integers.toBytes(nonce),
-                    gasPrice,
-                    Integers.toBytes(gasLimit),
-                    to,
-                    Integers.toBytesUnsigned(value),
-                    callData,
-                    v,
-                    r,
-                    s);
-            case EIP2930 -> RLPEncoder.sequence(
-                    Integers.toBytes(0x01),
-                    List.of(
-                            chainId,
-                            Integers.toBytes(nonce),
-                            gasPrice,
-                            Integers.toBytes(gasLimit),
-                            to,
-                            Integers.toBytesUnsigned(value),
-                            callData,
-                            List.of(/*accessList*/ ),
-                            Integers.toBytes(recId),
-                            r,
-                            s));
-            case EIP1559 -> RLPEncoder.sequence(
-                    Integers.toBytes(0x02),
-                    List.of(
-                            chainId,
-                            Integers.toBytes(nonce),
-                            maxPriorityGas,
-                            maxGas,
-                            Integers.toBytes(gasLimit),
-                            to,
-                            Integers.toBytesUnsigned(value),
-                            callData,
-                            List.of(/*accessList*/ ),
-                            Integers.toBytes(recId),
-                            r,
-                            s));
+            case LEGACY_ETHEREUM ->
+                RLPEncoder.list(
+                        Integers.toBytes(nonce),
+                        gasPrice,
+                        Integers.toBytes(gasLimit),
+                        to,
+                        Integers.toBytesUnsigned(value),
+                        callData,
+                        v,
+                        r,
+                        s);
+            case EIP2930 ->
+                RLPEncoder.sequence(
+                        Integers.toBytes(0x01),
+                        List.of(
+                                chainId,
+                                Integers.toBytes(nonce),
+                                gasPrice,
+                                Integers.toBytes(gasLimit),
+                                to,
+                                Integers.toBytesUnsigned(value),
+                                callData,
+                                List.of(/*accessList*/ ),
+                                Integers.toBytes(recId),
+                                r,
+                                s));
+            case EIP1559 ->
+                RLPEncoder.sequence(
+                        Integers.toBytes(0x02),
+                        List.of(
+                                chainId,
+                                Integers.toBytes(nonce),
+                                maxPriorityGas,
+                                maxGas,
+                                Integers.toBytes(gasLimit),
+                                to,
+                                Integers.toBytesUnsigned(value),
+                                callData,
+                                List.of(/*accessList*/ ),
+                                Integers.toBytes(recId),
+                                r,
+                                s));
         };
     }
 
@@ -350,6 +353,69 @@ public record EthTxData(
                 v,
                 r,
                 s);
+    }
+
+    @VisibleForTesting
+    public EthTxData replaceRecId(final int newRecId) {
+        return new EthTxData(
+                null,
+                type,
+                chainId,
+                nonce,
+                gasPrice,
+                maxPriorityGas,
+                maxGas,
+                gasLimit,
+                to,
+                value,
+                callData,
+                accessList,
+                newRecId,
+                v,
+                r,
+                s);
+    }
+
+    @VisibleForTesting
+    public EthTxData replaceR(final byte[] newR) {
+        return new EthTxData(
+                null,
+                type,
+                chainId,
+                nonce,
+                gasPrice,
+                maxPriorityGas,
+                maxGas,
+                gasLimit,
+                to,
+                value,
+                callData,
+                accessList,
+                recId,
+                v,
+                newR,
+                s);
+    }
+
+    @VisibleForTesting
+    public EthTxData replaceS(final byte[] newS) {
+        return new EthTxData(
+                null,
+                type,
+                chainId,
+                nonce,
+                gasPrice,
+                maxPriorityGas,
+                maxGas,
+                gasLimit,
+                to,
+                value,
+                callData,
+                accessList,
+                recId,
+                v,
+                r,
+                newS);
     }
 
     /**

@@ -115,10 +115,10 @@ class ProxyWorldUpdaterTest {
 
     @Test
     void collectingAndRefundingFeesDelegate() {
-        subject.collectFee(RELAYER_ID, 1L);
-        subject.refundFee(SENDER_ID, 1L);
-        verify(hederaOperations).collectFee(RELAYER_ID, 1L);
-        verify(hederaOperations).refundFee(SENDER_ID, 1L);
+        subject.collectGasFee(RELAYER_ID, 1L, false);
+        subject.refundGasFee(SENDER_ID, 1L);
+        verify(hederaOperations).collectGasFee(RELAYER_ID, 1L, false);
+        verify(hederaOperations).refundGasFee(SENDER_ID, 1L);
     }
 
     @Test

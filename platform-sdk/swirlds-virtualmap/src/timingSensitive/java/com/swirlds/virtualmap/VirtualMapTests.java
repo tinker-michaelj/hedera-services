@@ -22,21 +22,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.swirlds.base.state.MutabilityException;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.common.exceptions.ReferenceCountException;
-import com.swirlds.common.io.streams.SerializableDataInputStream;
-import com.swirlds.common.io.streams.SerializableDataOutputStream;
 import com.swirlds.common.merkle.MerkleInternal;
 import com.swirlds.common.merkle.MerkleNode;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
 import com.swirlds.common.merkle.route.MerkleRoute;
 import com.swirlds.common.merkle.route.MerkleRouteFactory;
 import com.swirlds.common.metrics.config.MetricsConfig;
 import com.swirlds.common.metrics.platform.DefaultPlatformMetrics;
 import com.swirlds.common.metrics.platform.MetricKeyRegistry;
 import com.swirlds.common.metrics.platform.PlatformMetricsFactoryImpl;
+import com.swirlds.common.test.fixtures.merkle.TestMerkleCryptoFactory;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.config.extensions.test.fixtures.TestConfigBuilder;
+import com.swirlds.merkledb.test.fixtures.MerkleDbTestUtils;
 import com.swirlds.metrics.api.Counter;
 import com.swirlds.metrics.api.LongGauge;
 import com.swirlds.metrics.api.Metric;
@@ -67,6 +64,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.hiero.base.crypto.Hash;
+import org.hiero.base.exceptions.ReferenceCountException;
+import org.hiero.base.io.streams.SerializableDataInputStream;
+import org.hiero.base.io.streams.SerializableDataOutputStream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -577,7 +579,7 @@ class VirtualMapTests extends VirtualTestBase {
 
         final VirtualMap<TestKey, TestValue> completed = fcm;
         fcm = fcm.copy();
-        MerkleCryptoFactory.getInstance().digestTreeSync(completed);
+        TestMerkleCryptoFactory.getInstance().digestTreeSync(completed);
 
         final Iterator<MerkleNode> breadthItr = completed.treeIterator().setOrder(BREADTH_FIRST);
         while (breadthItr.hasNext()) {
@@ -599,26 +601,31 @@ class VirtualMapTests extends VirtualTestBase {
         final VirtualMap<TestKey, TestValue> completed = fcm;
         fcm = fcm.copy();
 
-        final Hash firstHash = MerkleCryptoFactory.getInstance().digestTreeSync(completed);
-        final Iterator<MerkleNode> breadthItr = completed.treeIterator().setOrder(BREADTH_FIRST);
-        while (breadthItr.hasNext()) {
-            assertNotNull(breadthItr.next().getHash(), "Expected a value");
+        try {
+            final Hash firstHash = TestMerkleCryptoFactory.getInstance().digestTreeSync(completed);
+            final Iterator<MerkleNode> breadthItr = completed.treeIterator().setOrder(BREADTH_FIRST);
+            while (breadthItr.hasNext()) {
+                assertNotNull(breadthItr.next().getHash(), "Expected a value");
+            }
+
+            final Random rand = new Random(1234);
+            for (int i = 0; i < 10_000; i++) {
+                final int index = rand.nextInt(1_000_000);
+                final int value = 1_000_000 + rand.nextInt(1_000_000);
+                fcm.put(new TestKey(index), new TestValue("" + value));
+            }
+
+            final VirtualMap second = fcm;
+            fcm = copyAndRelease(fcm);
+            final Hash secondHash = TestMerkleCryptoFactory.getInstance().digestTreeSync(second);
+            assertNotSame(firstHash, secondHash, "Wrong value");
+        } finally {
+            fcm.release();
+            completed.release();
+
+            final VirtualRootNode<TestKey, TestValue> root = fcm.getRight();
+            assertTrue(root.getPipeline().awaitTermination(10, SECONDS), "Pipeline termination timed out");
         }
-
-        final Random rand = new Random(1234);
-        for (int i = 0; i < 10_000; i++) {
-            final int index = rand.nextInt(1_000_000);
-            final int value = 1_000_000 + rand.nextInt(1_000_000);
-            fcm.put(new TestKey(index), new TestValue("" + value));
-        }
-
-        final VirtualMap second = fcm;
-        fcm = copyAndRelease(fcm);
-        final Hash secondHash = MerkleCryptoFactory.getInstance().digestTreeSync(second);
-        assertNotSame(firstHash, secondHash, "Wrong value");
-
-        fcm.release();
-        completed.release();
     }
 
     @Test
@@ -938,7 +945,7 @@ class VirtualMapTests extends VirtualTestBase {
             throw new AssertionError("flushCount metric is not a counter");
         }
         // There is a potential race condition here, as we release `VirtualRootNode.flushLatch`
-        // before we update the statiscs (see https://github.com/hashgraph/hedera-services/issues/8439)
+        // before we update the statistics (see https://github.com/hashgraph/hedera-services/issues/8439)
         assertEventuallyEquals(
                 flushCount,
                 () -> counterMetric.get(),
@@ -982,7 +989,7 @@ class VirtualMapTests extends VirtualTestBase {
         final VirtualMap<TestKey, TestValue> map2 = createMap();
         // read the serialized map back into map2
         // Note to Jasper/Richard: The call to deserializeException below fails - but somewhat unexpectedly!
-        // Did I not set up the serialiaztion/deserialization correctly?
+        // Did I not set up the serialization/deserialization correctly?
         // currently throws IOException here.
         map2.deserialize(in, testDirectory, VirtualMap.ClassVersion.MERKLE_SERIALIZATION_CLEANUP);
         assertEquals("serializationTest", map2.getLabel());
@@ -1048,7 +1055,9 @@ class VirtualMapTests extends VirtualTestBase {
                 assertNull(map.get(new TestKey(i)), "The old value should not exist anymore");
             }
         } finally {
+            final VirtualRootNode<TestKey, TestValue> root = map.getRight();
             map.release();
+            assertTrue(root.getPipeline().awaitTermination(30, SECONDS), "Pipeline termination timed out");
         }
     }
 
@@ -1125,5 +1134,10 @@ class VirtualMapTests extends VirtualTestBase {
         }
 
         return hits;
+    }
+
+    @AfterEach
+    void tearDown() {
+        MerkleDbTestUtils.assertAllDatabasesClosed();
     }
 }

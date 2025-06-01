@@ -23,6 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -81,25 +82,29 @@ class DataFileCollectionCompactionTest {
         coll.startWriting();
         index.put(1L, storeDataItem(coll, new long[] {1, APPLE}));
         index.put(2L, storeDataItem(coll, new long[] {2, BANANA}));
-        coll.endWriting(1, 2).setFileCompleted();
+        coll.updateValidKeyRange(1, 2);
+        coll.endWriting();
 
         coll.startWriting();
         index.put(3L, storeDataItem(coll, new long[] {3, APPLE}));
         index.put(4L, storeDataItem(coll, new long[] {4, CHERRY}));
-        coll.endWriting(2, 4).setFileCompleted();
+        coll.updateValidKeyRange(2, 4);
+        coll.endWriting();
 
         coll.startWriting();
         index.put(4L, storeDataItem(coll, new long[] {4, CUTTLEFISH}));
         index.put(5L, storeDataItem(coll, new long[] {5, BANANA}));
         index.put(6L, storeDataItem(coll, new long[] {6, DATE}));
-        coll.endWriting(3, 6).setFileCompleted();
+        coll.updateValidKeyRange(3, 6);
+        coll.endWriting();
 
         coll.startWriting();
         index.put(7L, storeDataItem(coll, new long[] {7, APPLE}));
         index.put(8L, storeDataItem(coll, new long[] {8, EGGPLANT}));
         index.put(9L, storeDataItem(coll, new long[] {9, CUTTLEFISH}));
         index.put(10L, storeDataItem(coll, new long[] {10, FIG}));
-        coll.endWriting(5, 10).setFileCompleted();
+        coll.updateValidKeyRange(5, 10);
+        coll.endWriting();
 
         final CASableLongIndex indexUpdater = new CASableLongIndex() {
             public long get(long key) {
@@ -116,10 +121,12 @@ class DataFileCollectionCompactionTest {
                 return false;
             }
 
-            public <T extends Throwable> void forEach(final LongAction<T> action) throws InterruptedException, T {
+            public <T extends Throwable> boolean forEach(final LongAction<T> action, BooleanSupplier cond)
+                    throws InterruptedException, T {
                 for (final Map.Entry<Long, Long> e : index.entrySet()) {
                     action.handle(e.getKey(), e.getValue());
                 }
+                return true;
             }
         };
         final var compactor =
@@ -153,7 +160,7 @@ class DataFileCollectionCompactionTest {
 
         assertEquals(1, coll.getAllCompletedFiles().size(), "Too many files left over");
 
-        final var dataFileReader = coll.getAllCompletedFiles().get(0);
+        final var dataFileReader = coll.getAllCompletedFiles().getFirst();
         final var itr = dataFileReader.createIterator();
         prevKey = -1;
         while (itr.next()) {
@@ -179,7 +186,8 @@ class DataFileCollectionCompactionTest {
             for (int j = 0; j < MAXKEYS; ++j) {
                 index[j] = storeDataItem(store, new long[] {j, i * j});
             }
-            store.endWriting(0, index.length).setFileCompleted();
+            store.updateValidKeyRange(0, index.length);
+            store.endWriting();
         }
 
         final CountDownLatch compactionAboutComplete = new CountDownLatch(1);
@@ -208,11 +216,12 @@ class DataFileCollectionCompactionTest {
                             return true;
                         }
 
-                        public <T extends Throwable> void forEach(final LongAction<T> action)
+                        public <T extends Throwable> boolean forEach(final LongAction<T> action, BooleanSupplier cond)
                                 throws InterruptedException, T {
                             for (int i = 0; i < MAXKEYS; i++) {
                                 action.handle(i, index[i]);
                             }
+                            return true;
                         }
                     };
 
@@ -265,10 +274,12 @@ class DataFileCollectionCompactionTest {
                     return true;
                 }
 
-                public <T extends Throwable> void forEach(final LongAction<T> action) throws InterruptedException, T {
+                public <T extends Throwable> boolean forEach(final LongAction<T> action, BooleanSupplier cond)
+                        throws InterruptedException, T {
                     for (int i = 0; i < MAXKEYS; i++) {
                         action.handle(i, index[i]);
                     }
+                    return true;
                 }
             };
 
@@ -323,11 +334,12 @@ class DataFileCollectionCompactionTest {
                         return index.compareAndSet((int) key, oldValue, newValue);
                     }
 
-                    public <T extends Throwable> void forEach(final LongAction<T> action)
+                    public <T extends Throwable> boolean forEach(final LongAction<T> action, BooleanSupplier cond)
                             throws InterruptedException, T {
                         for (int i = 0; i < index.length(); i++) {
                             action.handle(i, index.get(i));
                         }
+                        return true;
                     }
                 };
 
@@ -343,7 +355,8 @@ class DataFileCollectionCompactionTest {
 
                 // Finish writing the current copy, which has newer data but an older index than
                 // the merged file
-                store.endWriting(0, index.length()).setFileCompleted();
+                store.updateValidKeyRange(0, index.length());
+                store.endWriting();
             }
 
             // Validate the result
@@ -373,7 +386,8 @@ class DataFileCollectionCompactionTest {
             for (int j = 0; j < MAX_KEYS; ++j) {
                 index.set(j, storeDataItem(store, new long[] {j, j}));
             }
-            store.endWriting(0, index.length()).setFileCompleted();
+            store.updateValidKeyRange(0, index.length());
+            store.endWriting();
 
             // Write new copies
             for (long i = 1; i < NUM_UPDATES; i++) {
@@ -396,11 +410,12 @@ class DataFileCollectionCompactionTest {
                         return index.compareAndSet((int) key, oldValue, newValue);
                     }
 
-                    public <T extends Throwable> void forEach(final LongAction<T> action)
+                    public <T extends Throwable> boolean forEach(final LongAction<T> action, BooleanSupplier cond)
                             throws InterruptedException, T {
                         for (int i = 0; i < index.length(); i++) {
                             action.handle(i, index.get(i));
                         }
+                        return true;
                     }
                 };
 
@@ -416,7 +431,8 @@ class DataFileCollectionCompactionTest {
 
                 // Finish writing the current copy, which has newer data but an older index than
                 // the merged file
-                store.endWriting(0, index.length()).setFileCompleted();
+                store.updateValidKeyRange(0, index.length());
+                store.endWriting();
             }
 
             // Restore from all files
@@ -452,8 +468,8 @@ class DataFileCollectionCompactionTest {
         String storeName = "testMergeSnapshotRestore";
         final Path testDir = tempFileDir.resolve(storeName);
         Files.createDirectories(testDir);
-        final LongListOffHeap index = new LongListOffHeap();
-        index.updateValidRange(0, numFiles * numValues);
+        final LongListOffHeap index = new LongListOffHeap(numValues, numFiles * numValues, 0);
+        index.updateValidRange(0, numFiles * numValues - 1);
         final DataFileCollection store = new DataFileCollection(MERKLE_DB_CONFIG, testDir, storeName, null);
         final DataFileCompactor compactor =
                 new DataFileCompactor(MERKLE_DB_CONFIG, storeName, store, index, null, null, null, null);
@@ -464,7 +480,8 @@ class DataFileCollectionCompactionTest {
                 final long dataLocation = storeDataItem(store, new long[] {i * numValues + j, i * numValues + j});
                 index.put(i * numValues + j, dataLocation);
             }
-            store.endWriting(0, index.size()).setFileCompleted();
+            store.updateValidKeyRange(0, index.size());
+            store.endWriting();
         }
         // Start compaction
         // Test scenario 0: start merging with mergingPaused semaphore locked, so merging
@@ -517,7 +534,8 @@ class DataFileCollectionCompactionTest {
                 index.put(i * numValues + j, dataLocation);
             }
         }
-        store.endWriting(0, index.size()).setFileCompleted();
+        store.updateValidKeyRange(0, index.size());
+        store.endWriting();
         newFileWriteCompleteLatch.countDown();
         // Test scenario 2: lock the semaphore just before taking a snapshot. Compaction may still
         // be
@@ -546,7 +564,8 @@ class DataFileCollectionCompactionTest {
         store.close();
 
         // Restore
-        final LongListOffHeap index2 = new LongListOffHeap(snapshotDir.resolve("index.ll"), CONFIGURATION);
+        final LongListOffHeap index2 =
+                new LongListOffHeap(snapshotDir.resolve("index.ll"), numValues, numFiles * numValues, 0, CONFIGURATION);
         final DataFileCollection store2 = new DataFileCollection(MERKLE_DB_CONFIG, snapshotDir, storeName, null);
         // Check index size
         assertEquals(numFiles * numValues, index2.size());
@@ -564,26 +583,26 @@ class DataFileCollectionCompactionTest {
         f.get();
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     @DisplayName("Restore with inconsistent index")
     void testInconsistentIndex() throws Exception {
         final int MAXKEYS = 100;
-        final LongList index = new LongListOffHeap();
+        final LongList index = new LongListOffHeap(MAXKEYS / 10, MAXKEYS, 0);
         String storeName = "testInconsistentIndex";
         final Path testDir = tempFileDir.resolve(storeName);
         final DataFileCollection store = new DataFileCollection(MERKLE_DB_CONFIG, testDir, storeName, null);
         final DataFileCompactor compactor =
                 new DataFileCompactor(MERKLE_DB_CONFIG, storeName, store, index, null, null, null, null);
 
-        final int numFiles = 2;
-        index.updateValidRange(0, numFiles * MAXKEYS);
+        final int numFiles = 10; // should be greater than min number of files to compact
+        index.updateValidRange(0, MAXKEYS - 1);
         for (long i = 0; i < numFiles; i++) {
             store.startWriting();
             for (int j = 0; j < MAXKEYS; ++j) {
                 index.put(j, storeDataItem(store, new long[] {j, i * j}));
             }
-            store.endWriting(0, index.size()).setFileCompleted();
+            store.updateValidKeyRange(0, index.size());
+            store.endWriting();
         }
 
         final Path snapshot = testDir.resolve("snapshot");
@@ -605,6 +624,7 @@ class DataFileCollectionCompactionTest {
                 if (updateCount.incrementAndGet() == MAXKEYS / 2) {
                     // Start a snapshot while the index is being updated
                     try {
+                        System.err.println("SAVED");
                         index.writeToFile(savedIndex);
                         store.snapshot(snapshot);
                     } catch (IOException ex) {
@@ -614,8 +634,9 @@ class DataFileCollectionCompactionTest {
                 return true;
             }
 
-            public <T extends Throwable> void forEach(final LongAction<T> action) throws InterruptedException, T {
-                index.forEach(action);
+            public <T extends Throwable> boolean forEach(final LongAction<T> action, BooleanSupplier cond)
+                    throws InterruptedException, T {
+                return index.forEach(action, cond);
             }
         };
 
@@ -627,7 +648,7 @@ class DataFileCollectionCompactionTest {
         }
 
         // Create a new data collection from the snapshot
-        LongList index2 = new LongListOffHeap(savedIndex, CONFIGURATION);
+        LongList index2 = new LongListOffHeap(savedIndex, MAXKEYS / 10, MAXKEYS, 0, CONFIGURATION);
         final DataFileCollection store2 = new DataFileCollection(MERKLE_DB_CONFIG, snapshot, storeName, null);
 
         // Merge all files with redundant records
@@ -646,8 +667,9 @@ class DataFileCollectionCompactionTest {
                 return true;
             }
 
-            public <T extends Throwable> void forEach(final LongAction<T> action) throws InterruptedException, T {
-                index2.forEach(action);
+            public <T extends Throwable> boolean forEach(final LongAction<T> action, BooleanSupplier cond)
+                    throws InterruptedException, T {
+                return index2.forEach(action, cond);
             }
         };
 

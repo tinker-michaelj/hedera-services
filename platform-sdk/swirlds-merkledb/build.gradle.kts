@@ -16,11 +16,17 @@ tasks.withType<JavaCompile>().configureEach {
 
 mainModuleInfo { annotationProcessor("com.swirlds.config.processor") }
 
-jmhModuleInfo { requires("jmh.core") }
+jmhModuleInfo {
+    requires("jmh.core")
+    requires("com.swirlds.base.test.fixtures")
+}
 
 testModuleInfo {
     requires("com.swirlds.common.test.fixtures")
     requires("com.swirlds.config.extensions.test.fixtures")
+    requires("com.swirlds.merkledb.test.fixtures")
+    requires("org.hiero.base.utility.test.fixtures")
+    requires("org.hiero.consensus.model")
     requires("org.junit.jupiter.api")
     requires("org.junit.jupiter.params")
     requires("org.mockito")
@@ -38,6 +44,10 @@ timingSensitiveModuleInfo {
     requires("com.swirlds.merkledb.test.fixtures")
     requires("com.swirlds.metrics.api")
     requires("com.swirlds.virtualmap")
+    requires("org.hiero.base.concurrent")
+    requires("org.hiero.base.crypto")
+    requires("org.hiero.base.utility")
+    requires("org.hiero.consensus.model")
     requires("org.apache.commons.lang3")
     requires("org.apache.logging.log4j")
     requires("org.apache.logging.log4j.core")
@@ -54,6 +64,7 @@ hammerModuleInfo {
     requires("com.swirlds.metrics.api")
     requires("com.swirlds.config.api")
     requires("com.swirlds.virtualmap")
+    requires("org.hiero.base.crypto")
     requires("org.apache.logging.log4j")
     requires("org.apache.logging.log4j.core")
     requires("org.junit.jupiter.api")

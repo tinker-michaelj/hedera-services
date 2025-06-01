@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.virtualmap.internal.hash;
 
-import com.swirlds.common.crypto.DigestType;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.common.crypto.HashBuilder;
 import com.swirlds.virtualmap.datasource.VirtualHashRecord;
 import com.swirlds.virtualmap.datasource.VirtualLeafRecord;
 import com.swirlds.virtualmap.internal.Path;
@@ -19,6 +16,10 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.hiero.base.crypto.Cryptography;
+import org.hiero.base.crypto.DigestType;
+import org.hiero.base.crypto.Hash;
+import org.hiero.base.crypto.HashBuilder;
 import org.junit.jupiter.params.provider.Arguments;
 
 public class VirtualHasherTestBase extends VirtualTestBase {
@@ -98,7 +99,7 @@ public class VirtualHasherTestBase extends VirtualTestBase {
 
         final long rightChildPath = Path.getRightChildPath(internalNode.path());
         VirtualHashRecord rightChild = ds.getInternal(rightChildPath);
-        Hash rightHash = CRYPTO.getNullHash();
+        Hash rightHash = Cryptography.NULL_HASH;
         if (rightChild != null) {
             if (rightChildPath < ds.firstLeafPath) {
                 rightChild = hashSubTree(ds, hashBuilder, rightChild);
@@ -158,7 +159,7 @@ public class VirtualHasherTestBase extends VirtualTestBase {
             if (rec == null) {
                 final Hash hash;
                 if (path < firstLeafPath) {
-                    hash = CRYPTO.getNullHash();
+                    hash = Cryptography.NULL_HASH;
                 } else {
                     final VirtualLeafRecord<TestKey, TestValue> leaf = getLeaf(path);
                     hash = CRYPTO.digestSync(leaf);

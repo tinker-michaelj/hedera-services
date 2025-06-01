@@ -74,12 +74,12 @@ public class CustomGasCharging {
         final var refund = unusedGas * context.gasPrice();
         if (allowanceUsed > 0) {
             requireNonNull(relayer);
-            worldUpdater.refundFee(relayer.hederaId(), Math.min(allowanceUsed, refund));
+            worldUpdater.refundGasFee(relayer.hederaId(), Math.min(allowanceUsed, refund));
             if (refund > allowanceUsed) {
-                worldUpdater.refundFee(sender.hederaId(), refund - allowanceUsed);
+                worldUpdater.refundGasFee(sender.hederaId(), refund - allowanceUsed);
             }
         } else {
-            worldUpdater.refundFee(sender.hederaId(), refund);
+            worldUpdater.refundGasFee(sender.hederaId(), refund);
         }
     }
 
@@ -156,12 +156,11 @@ public class CustomGasCharging {
         final var intrinsicGas = gasCalculator.transactionIntrinsicGasCost(transaction.evmPayload(), false);
 
         if (transaction.isEthereumTransaction()) {
-            final var payerId = transaction.relayerIdOrThrow();
-            final var fee = feeForAborted(payerId, context, worldUpdater, intrinsicGas);
-            worldUpdater.collectFee(payerId, fee);
+            final var fee = feeForAborted(transaction.relayerId(), context, worldUpdater, intrinsicGas);
+            worldUpdater.collectGasFee(transaction.relayerId(), fee, false);
         } else {
             final var fee = feeForAborted(sender, context, worldUpdater, intrinsicGas);
-            worldUpdater.collectFee(sender, fee);
+            worldUpdater.collectGasFee(sender, fee, false);
         }
     }
 
@@ -192,7 +191,7 @@ public class CustomGasCharging {
         validateTrue(
                 sender.getBalance().toLong() >= transaction.upfrontCostGiven(context.gasPrice()),
                 INSUFFICIENT_PAYER_BALANCE);
-        worldUpdater.collectFee(sender.hederaId(), transaction.gasCostGiven(context.gasPrice()));
+        worldUpdater.collectGasFee(sender.hederaId(), transaction.gasCostGiven(context.gasPrice()), false);
     }
 
     private long chargeWithRelayer(
@@ -218,8 +217,8 @@ public class CustomGasCharging {
         validateTrue(transaction.maxGasAllowance() >= relayerGasCost, INSUFFICIENT_TX_FEE);
         validateTrue(relayer.getBalance().toLong() >= relayerGasCost, INSUFFICIENT_PAYER_BALANCE);
         validateTrue(sender.getBalance().toLong() >= senderGasCost + transaction.value(), INSUFFICIENT_PAYER_BALANCE);
-        worldUpdater.collectFee(relayer.hederaId(), relayerGasCost);
-        worldUpdater.collectFee(sender.hederaId(), senderGasCost);
+        worldUpdater.collectGasFee(relayer.hederaId(), relayerGasCost, false);
+        worldUpdater.collectGasFee(sender.hederaId(), senderGasCost, true);
         return relayerGasCost;
     }
 

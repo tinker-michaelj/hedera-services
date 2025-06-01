@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-import com.hedera.node.app.config.ServicesConfigExtension;
-import com.swirlds.config.api.ConfigurationExtension;
-
 module com.hedera.node.app {
+    requires transitive com.hedera.cryptography.hints;
+    requires transitive com.hedera.cryptography.rpm;
     requires transitive com.hedera.node.app.hapi.utils;
     requires transitive com.hedera.node.app.service.addressbook.impl;
     requires transitive com.hedera.node.app.service.consensus.impl;
@@ -25,8 +24,14 @@ module com.hedera.node.app {
     requires transitive com.swirlds.platform.core;
     requires transitive com.swirlds.state.api;
     requires transitive com.swirlds.state.impl;
+    requires transitive org.hiero.base.crypto;
+    requires transitive org.hiero.base.utility;
+    requires transitive org.hiero.consensus.model;
+    requires transitive org.hiero.consensus.utility;
     requires transitive dagger;
     requires transitive io.grpc.stub;
+    requires transitive io.grpc;
+    requires transitive io.helidon.grpc.core;
     requires transitive io.helidon.webclient.grpc;
     requires transitive javax.inject;
     requires transitive org.apache.logging.log4j;
@@ -44,16 +49,17 @@ module com.hedera.node.app {
     requires com.swirlds.merkle;
     requires com.swirlds.merkledb;
     requires com.swirlds.virtualmap;
+    requires org.hiero.base.concurrent;
+    requires com.github.benmanes.caffeine;
     requires com.google.common;
     requires io.grpc.netty;
-    requires io.grpc;
     requires io.helidon.common.tls;
     requires io.helidon.webclient.api;
     requires io.netty.handler;
     requires io.netty.transport.classes.epoll;
     requires io.netty.transport;
     requires org.apache.commons.lang3;
-    requires static com.github.spotbugs.annotations;
+    requires static transitive com.github.spotbugs.annotations;
     requires static com.google.auto.service;
     requires static java.compiler;
 
@@ -84,7 +90,6 @@ module com.hedera.node.app {
     exports com.hedera.node.app.components;
     exports com.hedera.node.app.workflows.handle;
     exports com.hedera.node.app.workflows.prehandle;
-    exports com.hedera.node.app.version;
     exports com.hedera.node.app.validation;
     exports com.hedera.node.app.state.listeners;
     exports com.hedera.node.app.services;
@@ -119,7 +124,8 @@ module com.hedera.node.app {
     exports com.hedera.node.app.blocks.schemas;
     exports com.hedera.node.app.roster.schemas;
     exports com.hedera.node.app.ids.schemas;
+    exports com.hedera.node.app.hints.schemas;
 
-    provides ConfigurationExtension with
-            ServicesConfigExtension;
+    provides com.swirlds.config.api.ConfigurationExtension with
+            com.hedera.node.app.config.ServicesConfigExtension;
 }

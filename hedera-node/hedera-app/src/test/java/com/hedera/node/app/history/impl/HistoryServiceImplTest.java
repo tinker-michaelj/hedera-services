@@ -5,9 +5,7 @@ import static com.hedera.node.app.fixtures.AppTestBase.DEFAULT_CONFIG;
 import static com.hedera.node.app.roster.ActiveRosters.Phase.BOOTSTRAP;
 import static com.hedera.node.app.roster.ActiveRosters.Phase.HANDOFF;
 import static com.hedera.node.app.roster.ActiveRosters.Phase.TRANSITION;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,9 +59,6 @@ class HistoryServiceImplTest {
     private ActiveRosters activeRosters;
 
     @Mock
-    private HistoryLibraryCodec codec;
-
-    @Mock
     private HistoryLibrary library;
 
     @Mock
@@ -82,10 +77,8 @@ class HistoryServiceImplTest {
     }
 
     @Test
-    void onlyReadyGivenProof() {
+    void alwaysReady() {
         withLiveSubject();
-        assertFalse(subject.isReady());
-        subject.accept(HistoryProof.DEFAULT);
         assertTrue(subject.isReady());
     }
 
@@ -110,20 +103,10 @@ class HistoryServiceImplTest {
     }
 
     @Test
-    void updatesActiveProofAfterEffectiveHandoff() {
+    void handoffIsNoop() {
         withMockSubject();
         given(activeRosters.phase()).willReturn(HANDOFF);
-        given(store.purgeStateAfterHandoff(activeRosters)).willReturn(true);
-        final var currentVk = Bytes.wrap("Z");
-        final var construction = HistoryProofConstruction.newBuilder()
-                .targetProof(HistoryProof.newBuilder()
-                        .targetHistory(History.newBuilder().metadata(currentVk)))
-                .build();
-        given(store.getConstructionFor(activeRosters)).willReturn(construction);
-
-        subject.reconcile(activeRosters, currentVk, store, CONSENSUS_NOW, tssConfig);
-
-        assertDoesNotThrow(() -> subject.getCurrentProof(currentVk));
+        subject.reconcile(activeRosters, Bytes.EMPTY, store, CONSENSUS_NOW, tssConfig, true);
     }
 
     @Test
@@ -135,7 +118,7 @@ class HistoryServiceImplTest {
                         .targetProof(HistoryProof.DEFAULT)
                         .build());
 
-        subject.reconcile(activeRosters, null, store, CONSENSUS_NOW, tssConfig);
+        subject.reconcile(activeRosters, null, store, CONSENSUS_NOW, tssConfig, true);
 
         verifyNoMoreInteractions(component);
     }
@@ -150,9 +133,9 @@ class HistoryServiceImplTest {
         given(controllers.getOrCreateFor(activeRosters, HistoryProofConstruction.DEFAULT, store))
                 .willReturn(controller);
 
-        subject.reconcile(activeRosters, CURRENT_VK, store, CONSENSUS_NOW, tssConfig);
+        subject.reconcile(activeRosters, CURRENT_VK, store, CONSENSUS_NOW, tssConfig, true);
 
-        verify(controller).advanceConstruction(CONSENSUS_NOW, CURRENT_VK, store);
+        verify(controller).advanceConstruction(CONSENSUS_NOW, CURRENT_VK, store, true);
     }
 
     @Test
@@ -160,14 +143,13 @@ class HistoryServiceImplTest {
         withMockSubject();
         given(activeRosters.phase()).willReturn(HANDOFF);
 
-        subject.reconcile(activeRosters, null, store, CONSENSUS_NOW, tssConfig);
+        subject.reconcile(activeRosters, null, store, CONSENSUS_NOW, tssConfig, true);
 
         verify(store, never()).getConstructionFor(activeRosters);
     }
 
     private void withLiveSubject() {
-        subject = new HistoryServiceImpl(
-                NO_OP_METRICS, ForkJoinPool.commonPool(), appContext, library, codec, DEFAULT_CONFIG);
+        subject = new HistoryServiceImpl(NO_OP_METRICS, ForkJoinPool.commonPool(), appContext, library, DEFAULT_CONFIG);
     }
 
     private void withMockSubject() {

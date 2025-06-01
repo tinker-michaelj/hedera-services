@@ -122,12 +122,12 @@ public class ContractUpdateSuite {
                                 .isDeclinedReward(true)
                                 .noStakedAccountId()
                                 .stakedNodeId(0)),
-                contractUpdate(CONTRACT).newDeclinedReward(false).newStakedAccountId("0.0.10"),
+                contractUpdate(CONTRACT).newDeclinedReward(false).newStakedAccountId("10"),
                 getContractInfo(CONTRACT)
                         .has(contractWith()
                                 .isDeclinedReward(false)
                                 .noStakingNodeId()
-                                .stakedAccountId("0.0.10"))
+                                .stakedAccountId("10"))
                         .logged(),
 
                 /* --- reset the staking account */

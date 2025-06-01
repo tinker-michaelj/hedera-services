@@ -64,6 +64,7 @@ import com.hedera.services.bdd.junit.HapiTest;
 import com.hedera.services.bdd.junit.LeakyHapiTest;
 import com.hedera.services.bdd.spec.HapiSpecOperation;
 import com.hedera.services.bdd.spec.transactions.token.TokenMovement;
+import com.hederahashgraph.api.proto.java.TokenID;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -88,7 +89,7 @@ public class TokenAssociationSpecs {
     final Stream<DynamicTest> canHandleInvalidAssociateTransactions() {
         final String alice = "ALICE";
         final String bob = "BOB";
-        final String unknownID = "0.0." + Long.MAX_VALUE;
+        final String unknownID = String.valueOf(Long.MAX_VALUE);
         return defaultHapiSpec("CanHandleInvalidAssociateTransactions")
                 .given(
                         newKeyNamed(MULTI_KEY),
@@ -582,5 +583,40 @@ public class TokenAssociationSpecs {
                         .supplyKey(supplyKey)
                         .hasKnownStatus(SUCCESS),
                 tokenAssociate(accountToDelete, token).hasKnownStatus(ACCOUNT_DELETED));
+    }
+
+    @HapiTest
+    final Stream<DynamicTest> dissociateDeletedToken() {
+        final var account = "account";
+        final var tokenToDelete = "anyToken";
+        final var supplyKey = "supplyKey";
+        final var adminKey = "adminKey";
+        return hapiTest(
+                newKeyNamed(supplyKey),
+                newKeyNamed(adminKey),
+                cryptoCreate(account),
+                tokenCreate(tokenToDelete)
+                        .treasury(DEFAULT_PAYER)
+                        .tokenType(FUNGIBLE_COMMON)
+                        .initialSupply(1000L)
+                        .supplyKey(supplyKey)
+                        .adminKey(adminKey),
+                tokenAssociate(account, tokenToDelete),
+                tokenDelete(tokenToDelete).signedByPayerAnd(adminKey),
+                getAccountInfo(account).hasToken(relationshipWith(tokenToDelete)),
+                tokenDissociate(account, tokenToDelete),
+                getAccountInfo(account).hasNoTokenRelationship(tokenToDelete));
+    }
+
+    @HapiTest
+    final Stream<DynamicTest> dissociateWithInvalidToken() {
+        return hapiTest(withOpContext((spec, oplog) -> {
+            final var bogusTokenId = TokenID.newBuilder().setTokenNum(9999L);
+            spec.registry().saveTokenId("nonexistentToken", bogusTokenId.build());
+            allRunFor(
+                    spec,
+                    cryptoCreate("acc"),
+                    tokenDissociate("acc", "nonexistentToken").hasKnownStatus(TOKEN_NOT_ASSOCIATED_TO_ACCOUNT));
+        }));
     }
 }

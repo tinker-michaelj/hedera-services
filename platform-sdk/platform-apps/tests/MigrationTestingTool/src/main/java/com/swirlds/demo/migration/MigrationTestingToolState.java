@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.demo.migration;
 
-import static com.swirlds.platform.test.fixtures.state.FakeStateLifecycles.FAKE_MERKLE_STATE_LIFECYCLES;
-
-import com.swirlds.common.constructable.ConstructableIgnored;
-import com.swirlds.common.crypto.DigestType;
 import com.swirlds.common.merkle.MerkleNode;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.config.api.ConfigurationBuilder;
@@ -18,7 +14,7 @@ import com.swirlds.merkledb.MerkleDbDataSourceBuilder;
 import com.swirlds.merkledb.MerkleDbTableConfig;
 import com.swirlds.merkledb.config.MerkleDbConfig;
 import com.swirlds.platform.state.MerkleNodeState;
-import com.swirlds.platform.system.address.AddressBook;
+import com.swirlds.platform.test.fixtures.state.TestingAppStateInitializer;
 import com.swirlds.state.merkle.MerkleStateRoot;
 import com.swirlds.virtualmap.VirtualMap;
 import com.swirlds.virtualmap.datasource.VirtualDataSourceBuilder;
@@ -26,10 +22,16 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import java.util.List;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.constructable.ConstructableIgnored;
+import org.hiero.base.crypto.DigestType;
+import org.hiero.consensus.model.roster.AddressBook;
 
 @ConstructableIgnored
 public class MigrationTestingToolState extends MerkleStateRoot<MigrationTestingToolState> implements MerkleNodeState {
+
     private static final Logger logger = LogManager.getLogger(MigrationTestingToolState.class);
+
+    private static final long INITIAL_ACCOUNTS_HINT = 1_000_000;
 
     /**
      * The version history of this class. Versions that have been released must NEVER be given a different value.
@@ -124,7 +126,7 @@ public class MigrationTestingToolState extends MerkleStateRoot<MigrationTestingT
     @Override
     public MerkleNode migrate(int version) {
         if (version == ClassVersion.VIRTUAL_MAP) {
-            FAKE_MERKLE_STATE_LIFECYCLES.initRosterState(this);
+            TestingAppStateInitializer.DEFAULT.initRosterState(this);
             return this;
         }
 
@@ -182,10 +184,7 @@ public class MigrationTestingToolState extends MerkleStateRoot<MigrationTestingT
         setMerkleMap(new MerkleMap<>());
         final MerkleDbConfig merkleDbConfig = configuration.getConfigData(MerkleDbConfig.class);
         final MerkleDbTableConfig tableConfig = new MerkleDbTableConfig(
-                (short) 1,
-                DigestType.SHA_384,
-                merkleDbConfig.maxNumOfKeys(),
-                merkleDbConfig.hashesRamToDiskThreshold());
+                (short) 1, DigestType.SHA_384, INITIAL_ACCOUNTS_HINT, merkleDbConfig.hashesRamToDiskThreshold());
         // to make it work for the multiple node in one JVM case, we need reset the default instance path every time
         // we create another instance of MerkleDB.
         MerkleDb.resetDefaultInstancePath();

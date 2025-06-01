@@ -2,6 +2,7 @@
 package com.hedera.node.app.history;
 
 import com.hedera.node.app.history.handlers.HistoryHandlers;
+import com.hedera.node.app.history.impl.OnProofFinished;
 import com.hedera.node.app.roster.ActiveRosters;
 import com.hedera.node.app.roster.RosterService;
 import com.hedera.node.config.data.TssConfig;
@@ -44,24 +45,33 @@ public interface HistoryService extends Service {
     HistoryHandlers handlers();
 
     /**
+     * Sets the callback for when a proof construction is finished. Only one callback is active at a time.
+     * @param cb the callback to set
+     */
+    void onFinishedConstruction(@Nullable OnProofFinished cb);
+
+    /**
      * Whether this service is ready to provide metadata-enriched proofs.
      */
     boolean isReady();
 
     /**
      * Reconciles the history of roster proofs with the given active rosters and metadata, if known.
-     * @param activeRosters the active rosters
+     *
+     * @param activeRosters   the active rosters
      * @param currentMetadata the current metadata, if known
-     * @param historyStore the history store
-     * @param now the current time
-     * @param tssConfig the TSS configuration
+     * @param historyStore    the history store
+     * @param now             the current time
+     * @param tssConfig       the TSS configuration
+     * @param isActive        if the platform is active
      */
     void reconcile(
             @NonNull ActiveRosters activeRosters,
             @Nullable Bytes currentMetadata,
             @NonNull WritableHistoryStore historyStore,
             @NonNull Instant now,
-            @NonNull TssConfig tssConfig);
+            @NonNull TssConfig tssConfig,
+            final boolean isActive);
 
     /**
      * Returns a proof of inclusion of the given metadata for the current roster.

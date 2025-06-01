@@ -66,12 +66,10 @@ message EventCore {
   proto.Timestamp time_created = 3;
 
   /**
-   * A list of EventDescriptors representing the parents of this event.<br/>
-   * The list of parents SHALL include zero or one self parents, and zero or more other parents.<br/>
-   * The first element of the list SHALL be the self parent, if one exists.<br/>
-   * The list of parents SHALL NOT include more than one parent from the same creator.
+   * Used to be a list of EventDescriptors representing the parents of this event.<br/>
+   * This field has been moved to GossipEvent.
    */
-  repeated EventDescriptor parents = 4;
+  reserved 4;
 
   /**
    * The event specification version.<br/>

@@ -8,28 +8,23 @@ import static com.swirlds.platform.state.signed.ReservedSignedState.createNullRe
 import static com.swirlds.platform.state.snapshot.SignedStateFileReader.readStateFile;
 import static java.util.Objects.requireNonNull;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.swirlds.common.config.StateCommonConfig;
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.crypto.Hash;
 import com.swirlds.common.io.utility.RecycleBin;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.logging.legacy.payload.SavedStateLoadedPayload;
 import com.swirlds.platform.config.BasicConfig;
 import com.swirlds.platform.config.StateConfig;
 import com.swirlds.platform.crypto.CryptoStatic;
 import com.swirlds.platform.internal.SignedStateLoadingException;
-import com.swirlds.platform.roster.RosterRetriever;
-import com.swirlds.platform.roster.RosterUtils;
 import com.swirlds.platform.state.MerkleNodeState;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.snapshot.DeserializedSignedState;
 import com.swirlds.platform.state.snapshot.SavedStateInfo;
 import com.swirlds.platform.state.snapshot.SignedStateFilePath;
-import com.swirlds.platform.system.SoftwareVersion;
-import com.swirlds.platform.system.address.AddressBook;
 import com.swirlds.state.State;
+import com.swirlds.state.lifecycle.HapiUtils;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.io.IOException;
@@ -39,6 +34,11 @@ import java.util.List;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.crypto.Hash;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.roster.AddressBook;
+import org.hiero.consensus.roster.RosterRetriever;
+import org.hiero.consensus.roster.RosterUtils;
 
 /**
  * Utilities for loading and manipulating state files at startup time.
@@ -67,7 +67,7 @@ public final class StartupStateUtils {
     @Deprecated(forRemoval = true)
     public static HashedReservedSignedState getInitialState(
             @NonNull final RecycleBin recycleBin,
-            @NonNull final SoftwareVersion softwareVersion,
+            @NonNull final SemanticVersion softwareVersion,
             @NonNull final Supplier<MerkleNodeState> genesisStateBuilder,
             @NonNull final String mainClassName,
             @NonNull final String swirldName,
@@ -123,7 +123,7 @@ public final class StartupStateUtils {
             @NonNull final NodeId selfId,
             @NonNull final String mainClassName,
             @NonNull final String swirldName,
-            @NonNull final SoftwareVersion currentSoftwareVersion,
+            @NonNull final SemanticVersion currentSoftwareVersion,
             @NonNull final PlatformStateFacade platformStateFacade,
             @NonNull final PlatformContext platformContext) {
 
@@ -141,9 +141,8 @@ public final class StartupStateUtils {
             return createNullReservation();
         }
 
-        final ReservedSignedState state = loadLatestState(
+        return loadLatestState(
                 recycleBin, currentSoftwareVersion, savedStateFiles, platformStateFacade, platformContext);
-        return state;
     }
 
     /**
@@ -174,7 +173,8 @@ public final class StartupStateUtils {
         signedStateCopy.init(platformContext);
         signedStateCopy.setSigSet(initialSignedState.getSigSet());
 
-        final Hash hash = MerkleCryptoFactory.getInstance()
+        final Hash hash = platformContext
+                .getMerkleCryptography()
                 .digestTreeSync(initialSignedState.getState().getRoot());
         return new HashedReservedSignedState(signedStateCopy.reserve("Copied initial state"), hash);
     }
@@ -207,7 +207,7 @@ public final class StartupStateUtils {
      */
     private static ReservedSignedState loadLatestState(
             @NonNull final RecycleBin recycleBin,
-            @NonNull final SoftwareVersion currentSoftwareVersion,
+            @NonNull final SemanticVersion currentSoftwareVersion,
             @NonNull final List<SavedStateInfo> savedStateFiles,
             @NonNull final PlatformStateFacade platformStateFacade,
             @NonNull final PlatformContext platformContext)
@@ -237,7 +237,7 @@ public final class StartupStateUtils {
     @Nullable
     private static ReservedSignedState loadStateFile(
             @NonNull final RecycleBin recycleBin,
-            @NonNull final SoftwareVersion currentSoftwareVersion,
+            @NonNull final SemanticVersion currentSoftwareVersion,
             @NonNull final SavedStateInfo savedStateFile,
             @NonNull final PlatformStateFacade platformStateFacade,
             @NonNull final PlatformContext platformContext)
@@ -265,13 +265,13 @@ public final class StartupStateUtils {
                 deserializedSignedState.reservedSignedState().get().getState();
 
         final Hash oldHash = deserializedSignedState.originalHash();
-        final Hash newHash = rehashTree(state.getRoot());
+        final Hash newHash = rehashTree(platformContext.getMerkleCryptography(), state.getRoot());
 
-        final SoftwareVersion loadedVersion = platformStateFacade.creationSoftwareVersionOf(state);
+        final SemanticVersion loadedVersion = platformStateFacade.creationSoftwareVersionOf(state);
 
         if (oldHash.equals(newHash)) {
             logger.info(STARTUP.getMarker(), "Loaded state's hash is the same as when it was saved.");
-        } else if (loadedVersion.compareTo(currentSoftwareVersion) == 0) {
+        } else if (HapiUtils.SEMANTIC_VERSION_COMPARATOR.compare(loadedVersion, currentSoftwareVersion) == 0) {
             logger.error(
                     EXCEPTION.getMarker(),
                     "The saved state file {} was created with the current version of the software, "
@@ -319,7 +319,7 @@ public final class StartupStateUtils {
      */
     private static ReservedSignedState buildGenesisState(
             @NonNull final AddressBook addressBook,
-            @NonNull final SoftwareVersion appVersion,
+            @NonNull final SemanticVersion appVersion,
             @NonNull final MerkleNodeState stateRoot,
             @NonNull final PlatformStateFacade platformStateFacade,
             @NonNull final PlatformContext platformContext) {
@@ -351,7 +351,7 @@ public final class StartupStateUtils {
             final State state,
             final PlatformStateFacade platformStateFacade,
             final AddressBook addressBook,
-            final SoftwareVersion appVersion) {
+            final SemanticVersion appVersion) {
         final long round = 0L;
 
         platformStateFacade.bulkUpdateOf(state, v -> {
@@ -361,13 +361,60 @@ public final class StartupStateUtils {
             v.setConsensusTimestamp(Instant.ofEpochSecond(0L));
 
             final BasicConfig basicConfig = configuration.getConfigData(BasicConfig.class);
-
-            final long genesisFreezeTime = basicConfig.genesisFreezeTime();
-            if (genesisFreezeTime > 0) {
-                v.setFreezeTime(Instant.ofEpochSecond(genesisFreezeTime));
-            }
         });
 
         RosterUtils.setActiveRoster(state, RosterRetriever.buildRoster(addressBook), round);
+    }
+
+    /**
+     * Get the initial state to be used by a node. May return a state loaded from disk, or may return a genesis state
+     * if no valid state is found on disk.
+     *
+     * @param recycleBin          the recycle bin to use
+     * @param softwareVersion     the software version of the app
+     * @param stateRootSupplier   a supplier that can build a genesis state
+     * @param mainClassName       the name of the app's SwirldMain class
+     * @param swirldName          the name of this swirld
+     * @param selfId              the node id of this node
+     * @param platformStateFacade an object to access the platform state
+     * @param platformContext     the platform context
+     * @return the initial state to be used by this node
+     */
+    @NonNull
+    public static HashedReservedSignedState loadInitialState(
+            @NonNull final RecycleBin recycleBin,
+            @NonNull final SemanticVersion softwareVersion,
+            @NonNull final Supplier<MerkleNodeState> stateRootSupplier,
+            @NonNull final String mainClassName,
+            @NonNull final String swirldName,
+            @NonNull final NodeId selfId,
+            @NonNull final PlatformStateFacade platformStateFacade,
+            @NonNull final PlatformContext platformContext) {
+        final var loadedState = loadStateFile(
+                recycleBin, selfId, mainClassName, swirldName, softwareVersion, platformStateFacade, platformContext);
+        try (loadedState) {
+            if (loadedState.isNotNull()) {
+                logger.info(
+                        STARTUP.getMarker(),
+                        new SavedStateLoadedPayload(
+                                loadedState.get().getRound(), loadedState.get().getConsensusTimestamp()));
+                return copyInitialSignedState(loadedState.get(), platformStateFacade, platformContext);
+            }
+        }
+        final var stateRoot = stateRootSupplier.get();
+        final var signedState = new SignedState(
+                platformContext.getConfiguration(),
+                CryptoStatic::verifySignature,
+                stateRoot,
+                "genesis state",
+                false,
+                false,
+                false,
+                platformStateFacade);
+        signedState.init(platformContext);
+        final var reservedSignedState = signedState.reserve("initial reservation on genesis state");
+        try (reservedSignedState) {
+            return copyInitialSignedState(reservedSignedState.get(), platformStateFacade, platformContext);
+        }
     }
 }

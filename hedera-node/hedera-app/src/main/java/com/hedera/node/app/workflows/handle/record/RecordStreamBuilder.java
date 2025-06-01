@@ -32,6 +32,7 @@ import com.hedera.hapi.node.transaction.SignedTransaction;
 import com.hedera.hapi.node.transaction.TransactionBody;
 import com.hedera.hapi.node.transaction.TransactionReceipt;
 import com.hedera.hapi.node.transaction.TransactionRecord;
+import com.hedera.hapi.platform.event.TransactionGroupRole;
 import com.hedera.hapi.streams.ContractActions;
 import com.hedera.hapi.streams.ContractBytecode;
 import com.hedera.hapi.streams.ContractStateChanges;
@@ -70,7 +71,6 @@ import com.hedera.node.app.state.SingleTransactionRecord;
 import com.hedera.node.app.state.SingleTransactionRecord.TransactionOutputs;
 import com.hedera.pbj.runtime.OneOf;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
-import com.swirlds.common.crypto.DigestType;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.security.MessageDigest;
@@ -85,6 +85,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.hiero.base.crypto.DigestType;
 
 /**
  * A custom builder for create a {@link SingleTransactionRecord}.
@@ -196,6 +197,11 @@ public class RecordStreamBuilder
     private TokenType tokenType;
     private HederaFunctionality function;
 
+    /**
+     * ops duration used by the contract transaction
+     */
+    private long opsDuration;
+
     public RecordStreamBuilder(
             @NonNull final ReversingBehavior reversingBehavior,
             @NonNull final TransactionCustomizer customizer,
@@ -291,6 +297,11 @@ public class RecordStreamBuilder
     }
 
     @Override
+    public void setTransactionGroupRole(@NonNull final TransactionGroupRole role) {
+        // No-op
+    }
+
+    @Override
     public void nullOutSideEffectFields() {
         serialNumbers.clear();
         tokenTransferLists.clear();
@@ -318,7 +329,6 @@ public class RecordStreamBuilder
         transactionReceiptBuilder.topicRunningHashVersion(0L);
         transactionReceiptBuilder.topicSequenceNumber(0L);
         transactionRecordBuilder.alias(Bytes.EMPTY);
-        transactionRecordBuilder.ethereumHash(Bytes.EMPTY);
         transactionRecordBuilder.evmAddress(Bytes.EMPTY);
     }
 
@@ -789,6 +799,11 @@ public class RecordStreamBuilder
         return this.contractFunctionResult.gasUsed();
     }
 
+    @Override
+    public long getOpsDurationForContractTxn() {
+        return opsDuration;
+    }
+
     /**
      * Sets the receipt accountID.
      *
@@ -1049,6 +1064,12 @@ public class RecordStreamBuilder
             @NonNull final ContractStateChanges contractStateChanges, final boolean isMigration) {
         requireNonNull(contractStateChanges, "contractStateChanges must not be null");
         this.contractStateChanges.add(new AbstractMap.SimpleEntry<>(contractStateChanges, isMigration));
+        return this;
+    }
+
+    @Override
+    public ContractOperationStreamBuilder opsDuration(long opsDuration) {
+        this.opsDuration = opsDuration;
         return this;
     }
 

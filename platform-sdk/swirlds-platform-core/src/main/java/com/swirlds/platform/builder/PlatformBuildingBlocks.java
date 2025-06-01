@@ -3,36 +3,35 @@ package com.swirlds.platform.builder;
 
 import static java.util.Objects.requireNonNull;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.platform.state.ConsensusSnapshot;
 import com.swirlds.common.context.PlatformContext;
 import com.swirlds.common.notification.NotificationEngine;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.component.framework.model.WiringModel;
-import com.swirlds.platform.crypto.KeysAndCerts;
-import com.swirlds.platform.event.PlatformEvent;
 import com.swirlds.platform.event.preconsensus.PcesFileTracker;
+import com.swirlds.platform.freeze.FreezeCheckHolder;
 import com.swirlds.platform.gossip.IntakeEventCounter;
-import com.swirlds.platform.pool.TransactionPoolNexus;
-import com.swirlds.platform.roster.RosterHistory;
 import com.swirlds.platform.scratchpad.Scratchpad;
-import com.swirlds.platform.state.StateLifecycles;
+import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.state.SwirldStateManager;
 import com.swirlds.platform.state.iss.IssScratchpad;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.ReservedSignedState;
 import com.swirlds.platform.state.signed.SignedState;
-import com.swirlds.platform.system.SoftwareVersion;
 import com.swirlds.platform.system.status.StatusActionSubmitter;
 import com.swirlds.platform.util.RandomBuilder;
 import com.swirlds.platform.wiring.PlatformWiring;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
-import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
+import org.hiero.consensus.event.creator.impl.pool.TransactionPoolNexus;
+import org.hiero.consensus.model.event.PlatformEvent;
+import org.hiero.consensus.model.node.KeysAndCerts;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.roster.RosterHistory;
 
 /**
  * This record contains core utilities and basic objects needed to build a platform. It should not contain any platform
@@ -58,8 +57,8 @@ import java.util.function.Supplier;
  *                                               into gossip event storage, per peer
  * @param randomBuilder                          a builder for creating random number generators
  * @param transactionPoolNexus                   provides transactions to be added to new events
- * @param isInFreezePeriodReference              a reference to a predicate that determines if a timestamp is in the
- *                                               freeze period, this can be deleted as soon as the CES is retired.
+ * @param freezeCheckHolder                      a reference to a predicate that determines if a timestamp is in the
+ *                                               freeze period
  * @param latestImmutableStateProviderReference  a reference to a method that supplies the latest immutable state. Input
  *                                               argument is a string explaining why we are getting this state (for
  *                                               debugging). Return value may be null (implementation detail of
@@ -93,7 +92,7 @@ public record PlatformBuildingBlocks(
         @NonNull NodeId selfId,
         @NonNull String mainClassName,
         @NonNull String swirldName,
-        @NonNull SoftwareVersion appVersion,
+        @NonNull SemanticVersion appVersion,
         @NonNull ReservedSignedState initialState,
         @NonNull RosterHistory rosterHistory,
         @NonNull ApplicationCallbacks applicationCallbacks,
@@ -102,7 +101,7 @@ public record PlatformBuildingBlocks(
         @NonNull IntakeEventCounter intakeEventCounter,
         @NonNull RandomBuilder randomBuilder,
         @NonNull TransactionPoolNexus transactionPoolNexus,
-        @NonNull AtomicReference<Predicate<Instant>> isInFreezePeriodReference,
+        @NonNull FreezeCheckHolder freezeCheckHolder,
         @NonNull AtomicReference<Function<String, ReservedSignedState>> latestImmutableStateProviderReference,
         @NonNull PcesFileTracker initialPcesFiles,
         @NonNull String consensusEventStreamName,
@@ -114,7 +113,7 @@ public record PlatformBuildingBlocks(
         @NonNull AtomicReference<Consumer<SignedState>> loadReconnectStateReference,
         @NonNull AtomicReference<Runnable> clearAllPipelinesForReconnectReference,
         boolean firstPlatform,
-        @NonNull StateLifecycles stateLifecycles,
+        @NonNull ConsensusStateEventHandler consensusStateEventHandler,
         @NonNull PlatformStateFacade platformStateFacade) {
 
     public PlatformBuildingBlocks {
@@ -132,7 +131,7 @@ public record PlatformBuildingBlocks(
         requireNonNull(intakeEventCounter);
         requireNonNull(randomBuilder);
         requireNonNull(transactionPoolNexus);
-        requireNonNull(isInFreezePeriodReference);
+        requireNonNull(freezeCheckHolder);
         requireNonNull(latestImmutableStateProviderReference);
         requireNonNull(initialPcesFiles);
         requireNonNull(consensusEventStreamName);

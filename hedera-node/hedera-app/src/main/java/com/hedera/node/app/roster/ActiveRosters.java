@@ -9,14 +9,15 @@ import static java.util.stream.Collectors.toSet;
 import com.hedera.hapi.node.state.roster.Roster;
 import com.hedera.hapi.node.state.roster.RosterEntry;
 import com.hedera.pbj.runtime.io.buffer.Bytes;
-import com.swirlds.platform.state.service.ReadableRosterStore;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
-import java.util.Map;
 import java.util.Optional;
+import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Function;
+import org.hiero.consensus.roster.ReadableRosterStore;
 
 /**
  * Contains the active rosters for the {@link RosterService}'s current phase; and the <b>transition</b> from a
@@ -169,8 +170,9 @@ public class ActiveRosters {
      */
     public RosterTransitionWeights transitionWeights() {
         return switch (phase) {
-            case BOOTSTRAP, TRANSITION -> new RosterTransitionWeights(
-                    weightsFrom(lookup.apply(sourceRosterHash)), weightsFrom(lookup.apply(targetRosterHash)));
+            case BOOTSTRAP, TRANSITION ->
+                new RosterTransitionWeights(
+                        weightsFrom(lookup.apply(sourceRosterHash)), weightsFrom(lookup.apply(targetRosterHash)));
             case HANDOFF -> throw new IllegalStateException("No target roster in handoff phase");
         };
     }
@@ -208,7 +210,8 @@ public class ActiveRosters {
         return bytes.toHex().substring(0, HEX_PREFIX_LENGTH) + "...";
     }
 
-    private static @NonNull Map<Long, Long> weightsFrom(@NonNull final Roster roster) {
-        return requireNonNull(roster).rosterEntries().stream().collect(toMap(RosterEntry::nodeId, RosterEntry::weight));
+    private static @NonNull SortedMap<Long, Long> weightsFrom(@NonNull final Roster roster) {
+        return requireNonNull(roster).rosterEntries().stream()
+                .collect(toMap(RosterEntry::nodeId, RosterEntry::weight, (a, b) -> a, TreeMap::new));
     }
 }

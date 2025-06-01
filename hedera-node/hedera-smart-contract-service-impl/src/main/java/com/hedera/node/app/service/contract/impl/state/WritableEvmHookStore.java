@@ -88,7 +88,8 @@ public class WritableEvmHookStore extends ReadableEvmHookStore {
                     storage.put(slot.key(), slotValue);
                     yield firstKey;
                 }
-                default -> firstKey;};
+                default -> firstKey;
+            };
         }
         if (slotUsageChange != 0) {
             final var oldState = view.state();

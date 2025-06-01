@@ -42,9 +42,10 @@ class DataFileReaderCloseTest {
     @Test
     void readerIsOpenTest() throws Exception {
         final int COUNT = 100;
+        collection.updateValidKeyRange(0, COUNT - 1);
         collection.startWriting();
-        final LongList index = new LongListOffHeap();
-        index.updateValidRange(0, COUNT);
+        final LongList index = new LongListOffHeap(COUNT / 10, COUNT, COUNT / 10);
+        index.updateValidRange(0, COUNT - 1);
         for (int i = 0; i < COUNT; i++) {
             final int fi = i;
             index.put(
@@ -57,7 +58,7 @@ class DataFileReaderCloseTest {
                             2 * Long.BYTES));
         }
         //noinspection resource
-        collection.endWriting(0, COUNT - 1);
+        collection.endWriting();
         final AtomicBoolean readingThreadStarted = new AtomicBoolean(false);
         final AtomicReference<IOException> exceptionOccurred = new AtomicReference<>();
         final Thread readingThread = new Thread(() -> {
@@ -100,7 +101,8 @@ class DataFileReaderCloseTest {
         final Path tmpDir =
                 LegacyTemporaryFileBuilder.buildTemporaryDirectory("readWhileFinishWritingTest", CONFIGURATION);
         final MerkleDbConfig dbConfig = CONFIGURATION.getConfigData(MerkleDbConfig.class);
-        for (int i = 0; i < 100; i++) {
+        final int COUNT = 100;
+        for (int i = 0; i < COUNT; i++) {
             Path filePath = null;
             final int fi = i;
             try {
@@ -108,7 +110,7 @@ class DataFileReaderCloseTest {
                         new DataFileWriter("test", tmpDir, i, Instant.now(), INITIAL_COMPACTION_LEVEL);
                 filePath = writer.getPath();
                 final DataFileMetadata metadata = writer.getMetadata();
-                final LongList index = new LongListOffHeap();
+                final LongList index = new LongListOffHeap(COUNT / 10, COUNT, COUNT / 10);
                 index.updateValidRange(0, i);
                 index.put(
                         0,
@@ -123,7 +125,7 @@ class DataFileReaderCloseTest {
                 IntStream.of(0, 1).parallel().forEach(t -> {
                     try {
                         if (t == 1) {
-                            writer.finishWriting();
+                            writer.close();
                         } else {
                             final BufferedData itemBytes = reader.readDataItem(index.get(0));
                             Assertions.assertEquals(fi, itemBytes.readLong());

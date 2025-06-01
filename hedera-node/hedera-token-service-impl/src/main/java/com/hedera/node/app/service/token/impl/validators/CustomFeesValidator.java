@@ -12,7 +12,8 @@ import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_CUSTOM_FEE_COLL
 import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_TOKEN_ID_IN_CUSTOM_FEES;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.ROYALTY_FRACTION_CANNOT_EXCEED_ONE;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.TOKEN_NOT_ASSOCIATED_TO_FEE_COLLECTOR;
-import static com.hedera.node.app.spi.workflows.HandleException.validateFalse;
+import static com.hedera.node.app.service.token.impl.util.TokenHandlerHelper.TokenValidations.REQUIRE_NOT_PAUSED;
+import static com.hedera.node.app.service.token.impl.util.TokenHandlerHelper.getIfUsable;
 import static com.hedera.node.app.spi.workflows.HandleException.validateTrue;
 import static java.util.Objects.requireNonNull;
 
@@ -88,7 +89,7 @@ public class CustomFeesValidator {
         final var createdTokenId = createdToken.tokenId();
         for (final var fee : customFees) {
             // Validate the fee collector account is in a usable state
-            TokenHandlerHelper.getIfUsable(
+            getIfUsable(
                     fee.feeCollectorAccountIdOrElse(AccountID.DEFAULT),
                     accountStore,
                     expiryValidator,
@@ -100,12 +101,13 @@ public class CustomFeesValidator {
             validateTrue(isSpecified, CUSTOM_FEE_NOT_FULLY_SPECIFIED);
 
             switch (fee.fee().kind()) {
-                case FIXED_FEE -> validateFixedFeeForCreation(
-                        tokenType, fee, createdTokenId, tokenRelationStore, tokenStore, fees);
+                case FIXED_FEE ->
+                    validateFixedFeeForCreation(tokenType, fee, createdTokenId, tokenRelationStore, tokenStore, fees);
                 case FRACTIONAL_FEE -> validateFractionalFeeForCreation(tokenType, fee, fees);
                 case ROYALTY_FEE -> validateRoyaltyFee(tokenType, fee, tokenRelationStore, tokenStore);
-                default -> throw new IllegalArgumentException(
-                        "Unexpected value for custom fee type: " + fee.fee().kind());
+                default ->
+                    throw new IllegalArgumentException(
+                            "Unexpected value for custom fee type: " + fee.fee().kind());
             }
         }
         return fees;
@@ -131,7 +133,8 @@ public class CustomFeesValidator {
             @NonNull final ReadableAccountStore accountStore,
             @NonNull final ReadableTokenRelationStore tokenRelationStore,
             @NonNull final WritableTokenStore tokenStore,
-            @NonNull final List<CustomFee> customFees) {
+            @NonNull final List<CustomFee> customFees,
+            @NonNull final ExpiryValidator expiryValidator) {
         requireNonNull(token);
         requireNonNull(accountStore);
         requireNonNull(tokenRelationStore);
@@ -141,7 +144,14 @@ public class CustomFeesValidator {
         final var tokenType = token.tokenType();
         for (final var fee : customFees) {
             final var collectorId = fee.feeCollectorAccountIdOrElse(AccountID.DEFAULT);
-            final var collector = accountStore.getAccountById(collectorId);
+            // check if collector is usable
+            final var collector = getIfUsable(
+                    collectorId,
+                    accountStore,
+                    expiryValidator,
+                    INVALID_CUSTOM_FEE_COLLECTOR,
+                    INVALID_CUSTOM_FEE_COLLECTOR,
+                    TokenHandlerHelper.AccountIDType.NOT_ALIASED_ID);
             validateTrue(collector != null, INVALID_CUSTOM_FEE_COLLECTOR);
 
             switch (fee.fee().kind()) {
@@ -156,9 +166,9 @@ public class CustomFeesValidator {
                     }
                 }
                 case FRACTIONAL_FEE -> // fractional fee can be only applied to fungible common tokens
-                validateFractionalFeeForFeeScheduleUpdate(token, tokenRelationStore, collectorId, fee);
+                    validateFractionalFeeForFeeScheduleUpdate(token, tokenRelationStore, collectorId, fee);
                 case ROYALTY_FEE -> // royalty fee can be only applied to non-fungible unique tokens
-                validateRoyaltyFee(tokenType, fee, tokenRelationStore, tokenStore);
+                    validateRoyaltyFee(tokenType, fee, tokenRelationStore, tokenStore);
                 default -> throw new HandleException(CUSTOM_FEE_NOT_FULLY_SPECIFIED);
             }
         }
@@ -176,9 +186,7 @@ public class CustomFeesValidator {
             @NonNull final TokenID tokenNum,
             @NonNull final ReadableTokenRelationStore tokenRelationStore,
             @NonNull final WritableTokenStore tokenStore) {
-        final var denomToken = tokenStore.get(tokenNum);
-        validateTrue(denomToken != null, INVALID_TOKEN_ID_IN_CUSTOM_FEES);
-        validateFalse(denomToken.paused(), INVALID_TOKEN_ID_IN_CUSTOM_FEES);
+        final var denomToken = getIfUsable(tokenNum, tokenStore, REQUIRE_NOT_PAUSED, INVALID_TOKEN_ID_IN_CUSTOM_FEES);
         validateTrue(isFungibleCommon(denomToken.tokenType()), CUSTOM_FEE_DENOMINATION_MUST_BE_FUNGIBLE_COMMON);
         validateTrue(tokenRelationStore.get(feeCollectorNum, tokenNum) != null, TOKEN_NOT_ASSOCIATED_TO_FEE_COLLECTOR);
     }

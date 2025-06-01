@@ -7,6 +7,7 @@ import static com.hedera.node.app.service.contract.impl.exec.scope.HederaNativeO
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.ALIASED_SOMEBODY;
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.A_FUNGIBLE_RELATION;
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.A_NEW_ACCOUNT_ID;
+import static com.hedera.node.app.service.contract.impl.test.TestHelpers.DEFAULT_HEDERA_CONFIG;
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.EIP_1014_ADDRESS;
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.FUNGIBLE_TOKEN;
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.FUNGIBLE_TOKEN_ID;
@@ -15,13 +16,16 @@ import static com.hedera.node.app.service.contract.impl.test.TestHelpers.entityI
 import static com.hedera.node.app.service.contract.impl.test.TestHelpers.revertOutputFor;
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.tuweniToPbjBytes;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import com.esaulpaugh.headlong.abi.Address;
 import com.esaulpaugh.headlong.abi.Tuple;
+import com.hedera.hapi.node.base.AccountID;
 import com.hedera.node.app.service.contract.impl.exec.systemcontracts.hts.balanceof.BalanceOfCall;
 import com.hedera.node.app.service.contract.impl.exec.systemcontracts.hts.balanceof.BalanceOfTranslator;
 import com.hedera.node.app.service.contract.impl.test.exec.systemcontracts.common.CallTestBase;
+import com.hedera.node.config.testfixtures.HederaTestConfigBuilder;
 import java.math.BigInteger;
 import org.apache.tuweni.bytes.Bytes;
 import org.hyperledger.besu.evm.frame.MessageFrame;
@@ -44,9 +48,13 @@ class BalanceOfCallTest extends CallTestBase {
     @Test
     void revertsWithMissingAccount() {
         subject = new BalanceOfCall(mockEnhancement(), gasCalculator, FUNGIBLE_TOKEN, OWNER);
-        given(nativeOperations.resolveAlias(tuweniToPbjBytes(EIP_1014_ADDRESS))).willReturn(MISSING_ENTITY_NUMBER);
+        given(nativeOperations.resolveAlias(
+                        DEFAULT_HEDERA_CONFIG.shard(),
+                        DEFAULT_HEDERA_CONFIG.realm(),
+                        tuweniToPbjBytes(EIP_1014_ADDRESS)))
+                .willReturn(MISSING_ENTITY_NUMBER);
         given(nativeOperations.entityIdFactory()).willReturn(entityIdFactory);
-
+        given(nativeOperations.configuration()).willReturn(HederaTestConfigBuilder.createConfig());
         final var result = subject.execute().fullResult().result();
 
         assertEquals(MessageFrame.State.REVERT, result.getState());
@@ -56,11 +64,14 @@ class BalanceOfCallTest extends CallTestBase {
     @Test
     void returnsZeroBalanceForAbsentRelationship() {
         subject = new BalanceOfCall(mockEnhancement(), gasCalculator, FUNGIBLE_TOKEN, OWNER);
-        given(nativeOperations.resolveAlias(tuweniToPbjBytes(EIP_1014_ADDRESS)))
+        given(nativeOperations.resolveAlias(
+                        DEFAULT_HEDERA_CONFIG.shard(),
+                        DEFAULT_HEDERA_CONFIG.realm(),
+                        tuweniToPbjBytes(EIP_1014_ADDRESS)))
                 .willReturn(A_NEW_ACCOUNT_ID.accountNumOrThrow());
-        given(nativeOperations.getAccount(A_NEW_ACCOUNT_ID.accountNumOrThrow())).willReturn(ALIASED_SOMEBODY);
+        given(nativeOperations.getAccount(any(AccountID.class))).willReturn(ALIASED_SOMEBODY);
         given(nativeOperations.entityIdFactory()).willReturn(entityIdFactory);
-
+        given(nativeOperations.configuration()).willReturn(HederaTestConfigBuilder.createConfig());
         final var result = subject.execute().fullResult().result();
 
         assertEquals(MessageFrame.State.COMPLETED_SUCCESS, result.getState());
@@ -75,13 +86,16 @@ class BalanceOfCallTest extends CallTestBase {
     @Test
     void returnsNominalBalanceForPresentRelationship() {
         subject = new BalanceOfCall(mockEnhancement(), gasCalculator, FUNGIBLE_TOKEN, OWNER);
-        given(nativeOperations.resolveAlias(tuweniToPbjBytes(EIP_1014_ADDRESS)))
+        given(nativeOperations.resolveAlias(
+                        DEFAULT_HEDERA_CONFIG.shard(),
+                        DEFAULT_HEDERA_CONFIG.realm(),
+                        tuweniToPbjBytes(EIP_1014_ADDRESS)))
                 .willReturn(A_NEW_ACCOUNT_ID.accountNumOrThrow());
-        given(nativeOperations.getTokenRelation(A_NEW_ACCOUNT_ID.accountNumOrThrow(), FUNGIBLE_TOKEN_ID.tokenNum()))
+        given(nativeOperations.getTokenRelation(A_NEW_ACCOUNT_ID, FUNGIBLE_TOKEN_ID))
                 .willReturn(A_FUNGIBLE_RELATION);
-        given(nativeOperations.getAccount(A_NEW_ACCOUNT_ID.accountNumOrThrow())).willReturn(ALIASED_SOMEBODY);
+        given(nativeOperations.getAccount(any(AccountID.class))).willReturn(ALIASED_SOMEBODY);
         given(nativeOperations.entityIdFactory()).willReturn(entityIdFactory);
-
+        given(nativeOperations.configuration()).willReturn(HederaTestConfigBuilder.createConfig());
         final var result = subject.execute().fullResult().result();
 
         assertEquals(MessageFrame.State.COMPLETED_SUCCESS, result.getState());

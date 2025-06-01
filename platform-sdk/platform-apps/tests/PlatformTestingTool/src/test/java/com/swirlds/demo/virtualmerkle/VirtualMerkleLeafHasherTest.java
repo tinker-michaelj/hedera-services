@@ -5,8 +5,6 @@ import static com.swirlds.demo.virtualmerkle.VirtualMerkleLeafHasher.hashOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.swirlds.common.config.StateCommonConfig;
-import com.swirlds.common.crypto.DigestType;
-import com.swirlds.common.crypto.Hash;
 import com.swirlds.common.io.config.TemporaryFileConfig;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.config.api.ConfigurationBuilder;
@@ -18,6 +16,7 @@ import com.swirlds.merkledb.MerkleDb;
 import com.swirlds.merkledb.MerkleDbDataSourceBuilder;
 import com.swirlds.merkledb.MerkleDbTableConfig;
 import com.swirlds.merkledb.config.MerkleDbConfig;
+import com.swirlds.merkledb.test.fixtures.MerkleDbTestUtils;
 import com.swirlds.virtualmap.VirtualMap;
 import com.swirlds.virtualmap.config.VirtualMapConfig;
 import java.io.IOException;
@@ -25,6 +24,9 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import org.hiero.base.crypto.DigestType;
+import org.hiero.base.crypto.Hash;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -53,14 +55,7 @@ class VirtualMerkleLeafHasherTest {
         keySerializer = new SmartContractByteCodeMapKeySerializer();
         valueSerializer = new SmartContractByteCodeMapValueSerializer();
 
-        final MerkleDbConfig merkleDbConfig = CONFIGURATION.getConfigData(MerkleDbConfig.class);
-        final MerkleDbTableConfig tableConfig = new MerkleDbTableConfig(
-                        (short) 1,
-                        DigestType.SHA_384,
-                        merkleDbConfig.maxNumOfKeys(),
-                        merkleDbConfig.hashesRamToDiskThreshold())
-                .maxNumberOfKeys(50_000_000)
-                .hashesRamToDiskThreshold(0);
+        final MerkleDbTableConfig tableConfig = new MerkleDbTableConfig((short) 1, DigestType.SHA_384, 50_000_000, 0);
         dataSourceBuilder = new MerkleDbDataSourceBuilder(tableConfig, CONFIGURATION);
     }
 
@@ -198,7 +193,7 @@ class VirtualMerkleLeafHasherTest {
             hash.getBytes().writeTo(bb);
         }
 
-        // key serializaion
+        // key serialization
         bb.putLong(keyInput);
 
         // value serialization
@@ -206,5 +201,10 @@ class VirtualMerkleLeafHasherTest {
         bb.put(valueInput);
 
         return hashOf(Arrays.copyOf(bb.array(), bb.position()));
+    }
+
+    @AfterEach
+    void tearDown() {
+        MerkleDbTestUtils.assertAllDatabasesClosed();
     }
 }

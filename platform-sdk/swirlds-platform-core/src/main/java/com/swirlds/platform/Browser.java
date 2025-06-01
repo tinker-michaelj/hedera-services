@@ -28,12 +28,10 @@ import static com.swirlds.platform.util.BootstrapUtils.setupBrowserWindow;
 
 import com.swirlds.base.time.Time;
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.crypto.CryptographyFactory;
 import com.swirlds.common.io.filesystem.FileSystemManager;
 import com.swirlds.common.io.utility.RecycleBin;
-import com.swirlds.common.merkle.crypto.MerkleCryptoFactory;
+import com.swirlds.common.merkle.crypto.MerkleCryptography;
 import com.swirlds.common.merkle.crypto.MerkleCryptographyFactory;
-import com.swirlds.common.platform.NodeId;
 import com.swirlds.common.threading.framework.config.ThreadConfiguration;
 import com.swirlds.config.api.Configuration;
 import com.swirlds.config.api.ConfigurationBuilder;
@@ -43,8 +41,6 @@ import com.swirlds.metrics.api.Metrics;
 import com.swirlds.platform.builder.PlatformBuilder;
 import com.swirlds.platform.config.BasicConfig;
 import com.swirlds.platform.config.PathsConfig;
-import com.swirlds.platform.crypto.CryptoConstants;
-import com.swirlds.platform.crypto.KeysAndCerts;
 import com.swirlds.platform.gui.GuiEventStorage;
 import com.swirlds.platform.gui.hashgraph.HashgraphGuiSource;
 import com.swirlds.platform.gui.hashgraph.internal.StandardGuiSource;
@@ -53,16 +49,15 @@ import com.swirlds.platform.gui.internal.WinBrowser;
 import com.swirlds.platform.gui.model.InfoApp;
 import com.swirlds.platform.gui.model.InfoMember;
 import com.swirlds.platform.gui.model.InfoSwirld;
-import com.swirlds.platform.roster.RosterUtils;
-import com.swirlds.platform.state.StateLifecycles;
+import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.HashedReservedSignedState;
-import com.swirlds.platform.system.BasicSoftwareVersion;
+import com.swirlds.platform.state.signed.ReservedSignedState;
 import com.swirlds.platform.system.SwirldMain;
 import com.swirlds.platform.system.SystemExitCode;
-import com.swirlds.platform.system.address.AddressBook;
 import com.swirlds.platform.system.address.AddressBookUtils;
 import com.swirlds.platform.util.BootstrapUtils;
+import com.swirlds.state.State;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
@@ -74,6 +69,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hiero.base.crypto.Cryptography;
+import org.hiero.base.crypto.CryptographyProvider;
+import org.hiero.consensus.crypto.CryptoConstants;
+import org.hiero.consensus.model.node.KeysAndCerts;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.roster.AddressBook;
+import org.hiero.consensus.roster.RosterUtils;
 
 /**
  * The Browser that launches the Platforms that run the apps. This is used by the demo apps to launch the
@@ -173,7 +175,7 @@ public class Browser {
         final List<NodeId> configNodesToRun =
                 bootstrapConfiguration.getConfigData(BasicConfig.class).nodesToRun();
         final Set<NodeId> cliNodesToRun = commandLineArgs.localNodesToStart();
-        final var validNodeIds = appAddressBook.getNodeIdSet();
+        final Set<NodeId> validNodeIds = appAddressBook.getNodeIdSet();
         final List<NodeId> nodesToRun =
                 getNodesToRun(cliNodesToRun, configNodesToRun, () -> validNodeIds, validNodeIds::contains);
         logger.info(STARTUP.getMarker(), "The following nodes {} are set to run locally", nodesToRun);
@@ -223,14 +225,14 @@ public class Browser {
             setupGlobalMetrics(configuration);
             guiMetrics = getMetricsProvider().createPlatformMetrics(nodeId);
 
-            final var recycleBin = RecycleBin.create(
+            final RecycleBin recycleBin = RecycleBin.create(
                     guiMetrics,
                     configuration,
                     getStaticThreadManager(),
                     Time.getCurrent(),
                     FileSystemManager.create(configuration),
                     nodeId);
-            final var cryptography = CryptographyFactory.create();
+            final Cryptography cryptography = CryptographyProvider.getInstance();
             final KeysAndCerts keysAndCerts = initNodeSecurity(
                             appDefinition.getConfigAddressBook(), configuration, Set.copyOf(nodesToRun))
                     .get(nodeId);
@@ -239,28 +241,27 @@ public class Browser {
             cryptography.digestSync(appDefinition.getConfigAddressBook());
 
             // Set the MerkleCryptography instance for this node
-            final var merkleCryptography = MerkleCryptographyFactory.create(configuration, cryptography);
-            MerkleCryptoFactory.set(merkleCryptography);
+            final MerkleCryptography merkleCryptography = MerkleCryptographyFactory.create(configuration);
 
             // Register with the ConstructableRegistry classes which need configuration.
             BootstrapUtils.setupConstructableRegistryWithConfiguration(configuration);
 
             // Create platform context
-            final var platformContext = PlatformContext.create(
+            final PlatformContext platformContext = PlatformContext.create(
                     configuration,
                     Time.getCurrent(),
                     guiMetrics,
                     FileSystemManager.create(configuration),
                     recycleBin,
-                    MerkleCryptographyFactory.create(configuration, cryptography));
+                    merkleCryptography);
             // Each platform needs a different temporary state on disk.
             MerkleDb.resetDefaultInstancePath();
-            PlatformStateFacade platformStateFacade = new PlatformStateFacade(v -> new BasicSoftwareVersion(v.major()));
+            PlatformStateFacade platformStateFacade = new PlatformStateFacade();
             // Create the initial state for the platform
-            StateLifecycles stateLifecycles = appMain.newStateLifecycles();
+            ConsensusStateEventHandler consensusStateEventHandler = appMain.newConsensusStateEvenHandler();
             final HashedReservedSignedState reservedState = getInitialState(
                     recycleBin,
-                    appMain.getSoftwareVersion(),
+                    appMain.getSemanticVersion(),
                     appMain::newStateRoot,
                     appMain.getClass().getName(),
                     appDefinition.getSwirldName(),
@@ -268,28 +269,30 @@ public class Browser {
                     appDefinition.getConfigAddressBook(),
                     platformStateFacade,
                     platformContext);
-            final var initialState = reservedState.state();
+            final ReservedSignedState initialState = reservedState.state();
 
             // Initialize the address book
             final AddressBook addressBook = initializeAddressBook(
                     nodeId,
-                    appMain.getSoftwareVersion(),
+                    appMain.getSemanticVersion(),
                     initialState,
                     appDefinition.getConfigAddressBook(),
                     platformContext,
-                    stateLifecycles,
+                    consensusStateEventHandler,
                     platformStateFacade);
 
             // Build the platform with the given values
+            final State state = initialState.get().getState();
+            final long round = platformStateFacade.roundOf(state);
             final PlatformBuilder builder = PlatformBuilder.create(
                     appMain.getClass().getName(),
                     appDefinition.getSwirldName(),
-                    appMain.getSoftwareVersion(),
+                    appMain.getSemanticVersion(),
                     initialState,
-                    stateLifecycles,
+                    consensusStateEventHandler,
                     nodeId,
                     AddressBookUtils.formatConsensusEventStreamName(addressBook, nodeId),
-                    RosterUtils.buildRosterHistory(initialState.get().getState(), platformStateFacade),
+                    RosterUtils.buildRosterHistory(state, round),
                     platformStateFacade);
             if (showUi && index == 0) {
                 builder.withPreconsensusEventCallback(guiEventStorage::handlePreconsensusEvent);

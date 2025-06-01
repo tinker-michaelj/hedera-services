@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.merkledb;
 
-import static com.swirlds.common.test.fixtures.AssertionUtils.assertEventuallyEquals;
 import static com.swirlds.merkledb.test.fixtures.MerkleDbTestUtils.CONFIGURATION;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.swirlds.common.config.StateCommonConfig;
-import com.swirlds.common.constructable.ConstructableRegistry;
-import com.swirlds.common.crypto.DigestType;
 import com.swirlds.common.io.config.TemporaryFileConfig;
 import com.swirlds.common.io.utility.FileUtils;
 import com.swirlds.common.io.utility.LegacyTemporaryFileBuilder;
@@ -15,11 +12,13 @@ import com.swirlds.config.api.Configuration;
 import com.swirlds.config.api.ConfigurationBuilder;
 import com.swirlds.config.extensions.sources.SimpleConfigSource;
 import com.swirlds.merkledb.config.MerkleDbConfig;
+import com.swirlds.merkledb.test.fixtures.MerkleDbTestUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.UUID;
+import org.hiero.base.constructable.ConstructableRegistry;
+import org.hiero.base.crypto.DigestType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,17 +38,13 @@ public class MerkleDbTest {
     @AfterEach
     public void shutdownTest() {
         // check db count
-        assertEventuallyEquals(
-                0L, MerkleDbDataSource::getCountOfOpenDatabases, Duration.ofSeconds(2), "Expected no open dbs");
+        MerkleDbTestUtils.assertAllDatabasesClosed();
     }
 
     private static MerkleDbTableConfig fixedConfig() {
         final MerkleDbConfig merkleDbConfig = CONFIGURATION.getConfigData(MerkleDbConfig.class);
         return new MerkleDbTableConfig(
-                (short) 1,
-                DigestType.SHA_384,
-                merkleDbConfig.maxNumOfKeys(),
-                merkleDbConfig.hashesRamToDiskThreshold());
+                (short) 1, DigestType.SHA_384, 1_000_000, merkleDbConfig.hashesRamToDiskThreshold());
     }
 
     @Test
@@ -167,8 +162,8 @@ public class MerkleDbTest {
         instance.createDataSource(tableName, tableConfig, false).close();
 
         // create datasource reusing existing metadata
-        MerkleDbDataSource dataSource =
-                new MerkleDbDataSource(instance, tableName, instance.getNextTableId() - 1, tableConfig, false, false);
+        MerkleDbDataSource dataSource = new MerkleDbDataSource(
+                instance, CONFIGURATION, tableName, instance.getNextTableId() - 1, tableConfig, false, false);
         // This datasource cannot be properly closed because MerkleDb instance is not aware of this.
         // Assertion error is expected
         assertThrows(AssertionError.class, dataSource::close);

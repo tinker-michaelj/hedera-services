@@ -123,10 +123,11 @@ public interface HederaWorldUpdater extends WorldUpdater {
      * this method surfaces any problem by throwing an exception.
      *
      * @param payerId the id of the account to collect the fee from
-     * @param amount      the amount to collect
+     * @param amount the amount to collect
+     * @param withNonceIncrement if the nonce should be incremented
      * @throws IllegalArgumentException if the collection fails for any reason
      */
-    void collectFee(@NonNull AccountID payerId, long amount);
+    void collectGasFee(@NonNull AccountID payerId, long amount, boolean withNonceIncrement);
 
     /**
      * Refunds the given fee to the given account. The caller should have already
@@ -136,7 +137,7 @@ public interface HederaWorldUpdater extends WorldUpdater {
      * @param payerId the id of the account to refund the fee to
      * @param amount the amount to refund
      */
-    void refundFee(@NonNull AccountID payerId, long amount);
+    void refundGasFee(@NonNull AccountID payerId, long amount);
 
     /**
      * Tries to transfer the given amount from a sending contract to the recipient. The sender
@@ -178,6 +179,19 @@ public interface HederaWorldUpdater extends WorldUpdater {
      */
     Optional<ExceptionalHaltReason> tryTrackingSelfDestructBeneficiary(
             @NonNull Address deleted, @NonNull Address beneficiary, MessageFrame frame);
+
+    /**
+     * Tracks the given deletion of an account with the designated beneficiary.
+     *
+     * @param deleted the address of the account being deleted, a contract
+     * @param beneficiary the address of the beneficiary of the deletion
+     * @param frame
+     *
+     * `Beneficiary` must not be a token or a schedule.  Contract `deleted` must not be any token's
+     * treasury.  Contract `deleted` must not own any tokens.  These conditions are _not_ checked
+     * by this method.
+     */
+    void trackSelfDestructBeneficiary(@NonNull Address deleted, @NonNull Address beneficiary, MessageFrame frame);
 
     /**
      * Given the HAPI operation initiating a top-level {@code CONTRACT_CREATION} message, sets up the

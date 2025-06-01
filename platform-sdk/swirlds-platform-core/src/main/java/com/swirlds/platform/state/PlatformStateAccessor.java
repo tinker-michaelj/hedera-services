@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.swirlds.platform.state;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.platform.state.ConsensusSnapshot;
-import com.swirlds.common.crypto.Hash;
-import com.swirlds.platform.event.AncientMode;
-import com.swirlds.platform.system.SoftwareVersion;
-import com.swirlds.platform.system.address.AddressBook;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.time.Instant;
+import org.hiero.base.crypto.Hash;
+import org.hiero.consensus.model.event.AncientMode;
 
 /**
  * This interface represents the platform state and provide access to the state's properties.
@@ -25,21 +24,7 @@ public interface PlatformStateAccessor {
      * @return the creation version
      */
     @NonNull
-    SoftwareVersion getCreationSoftwareVersion();
-
-    /**
-     * Get the address book.
-     * @return an address book
-     */
-    @Nullable
-    AddressBook getAddressBook();
-
-    /**
-     * Get the previous address book.
-     * @return a previous address book
-     */
-    @Nullable
-    AddressBook getPreviousAddressBook();
+    SemanticVersion getCreationSoftwareVersion();
 
     /**
      * Get the round when this state was generated.
@@ -115,7 +100,7 @@ public interface PlatformStateAccessor {
      * @return the first software version where the birth round migration happened
      */
     @Nullable
-    SoftwareVersion getFirstVersionInBirthRoundMode();
+    SemanticVersion getFirstVersionInBirthRoundMode();
 
     /**
      * Get the last round before the birth round mode was enabled, or -1 if birth round mode has not yet been enabled.

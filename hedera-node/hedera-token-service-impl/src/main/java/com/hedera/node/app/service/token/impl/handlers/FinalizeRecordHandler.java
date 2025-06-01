@@ -29,7 +29,6 @@ import com.hedera.node.app.spi.workflows.record.StreamBuilder;
 import com.hedera.node.config.ConfigProvider;
 import com.hedera.node.config.data.AccountsConfig;
 import com.hedera.node.config.data.LedgerConfig;
-import com.hedera.node.config.data.StakingConfig;
 import com.swirlds.state.lifecycle.EntityIdFactory;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -60,18 +59,31 @@ public class FinalizeRecordHandler extends RecordFinalizerBase {
     private final AccountsConfig accountsConfig;
     private final EntityIdFactory entityIdFactory;
 
+    @Nullable
+    private final AtomicBoolean systemEntitiesCreatedFlag;
+
     /**
      * Constructs a {@link FinalizeRecordHandler} instance.
      * @param stakingRewardsHandler the {@link StakingRewardsHandler} instance
+     * @param configProvider the {@link ConfigProvider} instance
+     * @param entityIdFactory the {@link EntityIdFactory} instance
+     * @param systemEntitiesCreatedFlag the system entity creation flag, if not already done
      */
     @Inject
     public FinalizeRecordHandler(
             @NonNull final StakingRewardsHandler stakingRewardsHandler,
             @NonNull final ConfigProvider configProvider,
-            @NonNull final EntityIdFactory entityIdFactory) {
+            @NonNull final EntityIdFactory entityIdFactory,
+            @Nullable final AtomicBoolean systemEntitiesCreatedFlag) {
         this.stakingRewardsHandler = stakingRewardsHandler;
         this.accountsConfig = configProvider.getConfiguration().getConfigData(AccountsConfig.class);
         this.entityIdFactory = entityIdFactory;
+        this.systemEntitiesCreatedFlag = systemEntitiesCreatedFlag;
+    }
+
+    @Override
+    protected boolean systemEntitiesCreated() {
+        return systemEntitiesCreatedFlag == null || systemEntitiesCreatedFlag.get();
     }
 
     public void finalizeStakingRecord(
@@ -101,10 +113,9 @@ public class FinalizeRecordHandler extends RecordFinalizerBase {
         final var writableAccountStore = context.writableStore(WritableAccountStore.class);
         final var writableTokenRelStore = context.writableStore(WritableTokenRelationStore.class);
         final var writableNftStore = context.writableStore(WritableNftStore.class);
-        final var stakingConfig = context.configuration().getConfigData(StakingConfig.class);
         final var writableTokenStore = context.writableStore(WritableTokenStore.class);
 
-        if (stakingConfig.isEnabled() && explicitRewardReceivers != null && prePaidRewards != null) {
+        if (explicitRewardReceivers != null && prePaidRewards != null) {
             // staking rewards are triggered for any balance changes to account's that are staked to
             // a node. They are also triggered if staking related fields are modified
             // Calculate staking rewards and add them also to hbarChanges here, before assessing
@@ -131,9 +142,10 @@ public class FinalizeRecordHandler extends RecordFinalizerBase {
         }
         // If the function is not a crypto transfer, then we filter all zero amounts from token transfer list.
         // To be compatible with mono-service records, we _don't_ filter zero token transfers in the record
-        final var isCryptoTransfer = functionality == HederaFunctionality.CRYPTO_TRANSFER;
+        final var isCryptoTransfer =
+                functionality == HederaFunctionality.CRYPTO_TRANSFER ? IsCryptoTransfer.YES : IsCryptoTransfer.NO;
         // get all the token relation changes for fungible and non-fungible tokens
-        final var tokenRelChanges = tokenRelChangesFrom(writableTokenRelStore, !isCryptoTransfer);
+        final var tokenRelChanges = tokenRelChangesFrom(writableTokenRelStore, isCryptoTransfer);
         // get all the NFT changes. Go through the nft changes and see if there are any token relation changes
         // for the sender and receiver of the NFTs. If there are, then reduce the balance change for that relation
         // by 1 for receiver and increment the balance change for sender by 1. This is to ensure that the NFT
@@ -155,7 +167,7 @@ public class FinalizeRecordHandler extends RecordFinalizerBase {
         }
         final var hasTokenTransferLists = !tokenRelChanges.isEmpty() || !nftChanges.isEmpty();
         if (hasTokenTransferLists) {
-            final var tokenTransferLists = asTokenTransferListFrom(tokenRelChanges, !isCryptoTransfer);
+            final var tokenTransferLists = asTokenTransferListFrom(tokenRelChanges, isCryptoTransfer);
             final var nftTokenTransferLists = asTokenTransferListFromNftChanges(nftChanges);
             tokenTransferLists.addAll(nftTokenTransferLists);
             tokenTransferLists.sort(TOKEN_TRANSFER_LIST_COMPARATOR);

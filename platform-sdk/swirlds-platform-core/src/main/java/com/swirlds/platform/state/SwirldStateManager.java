@@ -4,18 +4,14 @@ package com.swirlds.platform.state;
 import static com.swirlds.platform.state.SwirldStateManagerUtils.fastCopy;
 import static java.util.Objects.requireNonNull;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import com.hedera.hapi.node.state.roster.Roster;
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
 import com.swirlds.common.context.PlatformContext;
-import com.swirlds.common.platform.NodeId;
-import com.swirlds.platform.FreezePeriodChecker;
-import com.swirlds.platform.components.transaction.system.ScopedSystemTransaction;
-import com.swirlds.platform.internal.ConsensusRound;
+import com.swirlds.platform.freeze.FreezePeriodChecker;
 import com.swirlds.platform.metrics.StateMetrics;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.signed.SignedState;
-import com.swirlds.platform.system.Round;
-import com.swirlds.platform.system.SoftwareVersion;
 import com.swirlds.platform.system.status.StatusActionSubmitter;
 import com.swirlds.platform.uptime.UptimeTracker;
 import com.swirlds.state.State;
@@ -24,9 +20,13 @@ import java.time.Instant;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.hiero.consensus.model.hashgraph.ConsensusRound;
+import org.hiero.consensus.model.hashgraph.Round;
+import org.hiero.consensus.model.node.NodeId;
+import org.hiero.consensus.model.transaction.ScopedSystemTransaction;
 
 /**
- * Manages all interactions with the state object required by {@link StateLifecycles}.
+ * Manages all interactions with the state object required by {@link ConsensusStateEventHandler}.
  */
 public class SwirldStateManager implements FreezePeriodChecker {
 
@@ -58,9 +58,9 @@ public class SwirldStateManager implements FreezePeriodChecker {
     /**
      * The current software version.
      */
-    private final SoftwareVersion softwareVersion;
+    private final SemanticVersion softwareVersion;
 
-    private final StateLifecycles<MerkleNodeState> stateLifecycles;
+    private final ConsensusStateEventHandler<MerkleNodeState> consensusStateEventHandler;
 
     private final PlatformStateFacade platformStateFacade;
 
@@ -72,24 +72,24 @@ public class SwirldStateManager implements FreezePeriodChecker {
      * @param selfId                this node's id
      * @param statusActionSubmitter enables submitting platform status actions
      * @param softwareVersion       the current software version
-     * @param stateLifecycles       the state lifecycles
+     * @param consensusStateEventHandler       the state lifecycles
      */
     public SwirldStateManager(
             @NonNull final PlatformContext platformContext,
             @NonNull final Roster roster,
             @NonNull final NodeId selfId,
             @NonNull final StatusActionSubmitter statusActionSubmitter,
-            @NonNull final SoftwareVersion softwareVersion,
-            @NonNull final StateLifecycles<MerkleNodeState> stateLifecycles,
+            @NonNull final SemanticVersion softwareVersion,
+            @NonNull final ConsensusStateEventHandler<MerkleNodeState> consensusStateEventHandler,
             @NonNull final PlatformStateFacade platformStateFacade) {
 
         requireNonNull(platformContext);
         requireNonNull(roster);
         requireNonNull(selfId);
-        requireNonNull(stateLifecycles);
+        requireNonNull(consensusStateEventHandler);
 
         this.platformStateFacade = requireNonNull(platformStateFacade);
-        this.stateLifecycles = stateLifecycles;
+        this.consensusStateEventHandler = consensusStateEventHandler;
         this.stats = new StateMetrics(platformContext.getMetrics());
         requireNonNull(statusActionSubmitter);
         this.softwareVersion = requireNonNull(softwareVersion);
@@ -120,7 +120,7 @@ public class SwirldStateManager implements FreezePeriodChecker {
 
     /**
      * Handles the events in a consensus round. Implementations are responsible for invoking
-     * {@link StateLifecycles#onHandleConsensusRound(Round, MerkleNodeState, Consumer)} .
+     * {@link ConsensusStateEventHandler#onHandleConsensusRound(Round, MerkleNodeState, Consumer)} .
      *
      * @param round the round to handle
      */
@@ -128,7 +128,7 @@ public class SwirldStateManager implements FreezePeriodChecker {
         final MerkleNodeState state = stateRef.get();
 
         uptimeTracker.handleRound(round);
-        return transactionHandler.handleRound(round, stateLifecycles, state);
+        return transactionHandler.handleRound(round, consensusStateEventHandler, state);
     }
 
     /**
@@ -138,7 +138,7 @@ public class SwirldStateManager implements FreezePeriodChecker {
     public boolean sealConsensusRound(@NonNull final Round round) {
         requireNonNull(round);
         final MerkleNodeState state = stateRef.get();
-        return stateLifecycles.onSealConsensusRound(round, state);
+        return consensusStateEventHandler.onSealConsensusRound(round, state);
     }
 
     /**
