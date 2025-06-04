@@ -91,14 +91,6 @@ public interface Network {
     AsyncNetworkActions withTimeout(@NonNull Duration timeout);
 
     /**
-     * Resumes the network after it has previously been paused, e.g. to prepare for an upgrade.
-     *
-     * @param duration the duration to wait before considering the resume operation as failed
-     * @throws InterruptedException if the thread is interrupted while waiting
-     */
-    void resume(@NonNull Duration duration) throws InterruptedException;
-
-    /**
      * Gets the consensus rounds of all nodes.
      *
      * @return the consensus rounds of the filtered nodes
