@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package org.hiero.otter.fixtures;
 
+import com.hedera.hapi.node.base.SemanticVersion;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import java.time.Duration;
 import java.util.List;
@@ -89,6 +90,27 @@ public interface Network {
      */
     @NonNull
     AsyncNetworkActions withTimeout(@NonNull Duration timeout);
+
+    /**
+     * Sets the version of the network.
+     *
+     * <p>This method sets the version of all nodes currently added to the network. Please note that the new version
+     * will become effective only after a node is (re-)started.
+     *
+     * @see Node#setVersion(SemanticVersion)
+     *
+     * @param version the semantic version to set for the network
+     */
+    void setVersion(@NonNull SemanticVersion version);
+
+    /**
+     * This method updates the version of all nodes in the network to trigger a "config only upgrade" on the next restart.
+     *
+     * <p>Please note that the new version will become effective only after a node is (re-)started.
+     *
+     * @see Node#bumpConfigVersion()
+     */
+    void bumpConfigVersion();
 
     /**
      * Gets the consensus rounds of all nodes.
