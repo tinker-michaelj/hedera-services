@@ -461,6 +461,8 @@ val cleanYahCli =
         delete(File(project.file("yahcli"), "yahcli.jar"))
     }
 
+dependencies { implementation(project(":hedera-protobuf-java-api")) }
+
 tasks.clean {
     dependsOn(cleanYahCli)
     dependsOn(cleanValidation)
