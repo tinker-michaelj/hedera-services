@@ -371,16 +371,20 @@ public class SystemTransactions {
     private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
 
     private void setupPlexAccounts(SystemContext systemContext) {
-        WELL_KNOWN_KEYS.forEach((id, key) -> {
-            final var op = CryptoCreateTransactionBody.newBuilder()
-                    .key(key)
-                    .maxAutomaticTokenAssociations(NUM_TOKENS)
-                    .initialBalance(INITIAL_BALANCE)
-                    .autoRenewPeriod(new Duration(7776000L))
-                    .build();
+        for (final var entry : WELL_KNOWN_KEYS.entrySet()) {
+            final var accountNum = entry.getKey();
+            final var key = entry.getValue();
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder().cryptoCreateAccount(op).build(), id);
-        });
+                    b -> b.memo("Synthetic plex account creation")
+                            .cryptoCreateAccount(CryptoCreateTransactionBody.newBuilder()
+                                    .key(key)
+                                    .maxAutomaticTokenAssociations(NUM_TOKENS)
+                                    .initialBalance(INITIAL_BALANCE)
+                                    .autoRenewPeriod(new Duration(7776000L))
+                                    .build())
+                            .build(),
+                    accountNum);
+        }
     }
 
     private static final String FEE_COLLECTOR_INITCODE_LOC =
@@ -398,7 +402,7 @@ public class SystemTransactions {
                     .gas(1_000_000)
                     .build();
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder()
+                    b -> b.memo("Synthetic plex account creation")
                             .transactionID(TransactionID.newBuilder()
                                     .accountID(AccountID.newBuilder().accountNum(MASTER_ID))
                                     .build())
@@ -425,7 +429,10 @@ public class SystemTransactions {
                     .treasury(tokenTreasuryId)
                     .build();
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder().tokenCreation(op).build(), FIRST_TOKEN_NUM + i);
+                    b -> b.memo("Synthetic plex token creation")
+                            .tokenCreation(op)
+                            .build(),
+                    FIRST_TOKEN_NUM + i);
         }
     }
 
@@ -435,7 +442,10 @@ public class SystemTransactions {
                     .autoRenewPeriod(new Duration(7776000L))
                     .build();
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder().consensusCreateTopic(op).build(), FIRST_TOPIC_NUM + i);
+                    b -> b.memo("Synthetic plex topic creation")
+                            .consensusCreateTopic(op)
+                            .build(),
+                    FIRST_TOPIC_NUM + i);
         }
     }
     // </PLEX>
