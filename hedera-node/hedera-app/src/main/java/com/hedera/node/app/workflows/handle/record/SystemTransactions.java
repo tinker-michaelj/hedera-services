@@ -97,6 +97,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.SplittableRandom;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -364,9 +365,25 @@ public class SystemTransactions {
             4589192L,
             Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
     private static final int NUM_ACCOUNTS = 10;
-    private static final int NUM_TOKENS = 10;
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
+
+    private static final Map<String, String> DEV_TOKEN_METADATA = Map.ofEntries(
+            Map.entry("aaa", "Token A"),
+            Map.entry("bbb", "Token B"),
+            Map.entry("ccc", "Token C"),
+            Map.entry("usdc", "USD Coin"),
+            Map.entry("ddd", "Token D"),
+            Map.entry("apy", "Aperture"),
+            Map.entry("brx", "BridgeX"),
+            Map.entry("eqd", "EquiDollar"),
+            Map.entry("nx", "Nexis"),
+            Map.entry("qbt", "Quantobit"),
+            Map.entry("seed", "Sustenance DAO"),
+            Map.entry("shd", "Shade"),
+            Map.entry("vote", "Voluntary Engine"),
+            Map.entry("wag", "We-All-GM"));
+    private static final int NUM_TOKENS = DEV_TOKEN_METADATA.size();
 
     private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
 
@@ -416,24 +433,22 @@ public class SystemTransactions {
 
     private void setupPlexTokens(SystemContext systemContext) {
         final var tokenTreasuryId = AccountID.newBuilder().accountNum(MASTER_ID).build();
-        final var letters = "abcdefghij";
-        for (int i = 0; i < NUM_TOKENS; i++) {
-            final var letter = letters.charAt(i);
+        final var number = new AtomicLong(FIRST_TOKEN_NUM);
+        DEV_TOKEN_METADATA.forEach((s, name) -> {
+            final long n = number.getAndIncrement();
+            final var symbol = s.toUpperCase();
             final var op = TokenCreateTransactionBody.newBuilder()
                     .supplyKey(MASTER_KEY)
                     .tokenType(FUNGIBLE_COMMON)
-                    .decimals(i == 3 ? 6 : RANDOM.nextInt(10))
-                    .symbol(i == 3 ? "USDC" : Strings.repeat("" + letter, 3))
-                    .name(i == 3 ? "US Dollar" : ("Token" + letter).toUpperCase())
+                    .decimals(symbol.equals("USDC") ? 6 : RANDOM.nextInt(2, 11))
+                    .symbol(symbol)
+                    .name(name)
                     .initialSupply(Long.MAX_VALUE)
                     .treasury(tokenTreasuryId)
                     .build();
             systemContext.dispatchCreation(
-                    b -> b.memo("Synthetic plex token creation")
-                            .tokenCreation(op)
-                            .build(),
-                    FIRST_TOKEN_NUM + i);
-        }
+                    TransactionBody.newBuilder().tokenCreation(op).build(), n);
+        });
     }
 
     private void setupPlexTopics(SystemContext systemContext) {
