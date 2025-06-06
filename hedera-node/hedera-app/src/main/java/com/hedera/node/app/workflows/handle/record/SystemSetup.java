@@ -94,6 +94,7 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import javax.inject.Inject;
@@ -117,6 +118,23 @@ public class SystemSetup {
     private static final String TREASURY_CLONE_MEMO = "Synthetic zero-balance treasury clone";
     private static final Comparator<Account> ACCOUNT_COMPARATOR =
             Comparator.comparing(Account::accountId, ACCOUNT_ID_COMPARATOR);
+
+    private static final Map<String, String> DEV_TOKEN_METADATA = Map.ofEntries(
+            Map.entry("aaa", "Token A"),
+            Map.entry("bbb", "Token B"),
+            Map.entry("ccc", "Token C"),
+            Map.entry("usdc", "USD Coin"),
+            Map.entry("ddd", "Token D"),
+            Map.entry("apy", "Aperture"),
+            Map.entry("brx", "BridgeX"),
+            Map.entry("eqd", "EquiDollar"),
+            Map.entry("nx", "Nexis"),
+            Map.entry("qbt", "Quantobit"),
+            Map.entry("seed", "Sustenance DAO"),
+            Map.entry("shd", "Shade"),
+            Map.entry("vote", "Voluntary Engine"),
+            Map.entry("wag", "We-All-GM"));
+
     public static final Comparator<Node> NODE_COMPARATOR = Comparator.comparing(Node::nodeId, Long::compare);
 
     private SortedSet<Account> systemAccounts = new TreeSet<>(ACCOUNT_COMPARATOR);
@@ -189,7 +207,7 @@ public class SystemSetup {
             Key.newBuilder().ed25519(Bytes.fromHex(A4589190_PUBLIC_KEY)).build(),
             4589192L,
             Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
-    private static final int NUM_TOKENS = 10;
+    private static final int NUM_TOKENS = DEV_TOKEN_METADATA.size();
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
 
@@ -209,7 +227,7 @@ public class SystemSetup {
     }
 
     private static final String FEE_COLLECTOR_INITCODE_LOC =
-            "/Users/michaeltinker/dev/lambdaplex/lambdaplex-contracts/build/LambdaplexFeeCollector.bin";
+            "/Users/michaeltinker/dev/lambdaplex/contracts/build/LambdaplexFeeCollector.bin";
 
     private void setupPlexFeeCollector(SystemContext systemContext) {
         final byte[] initcode;
@@ -237,21 +255,22 @@ public class SystemSetup {
 
     private void setupPlexTokens(SystemContext systemContext) {
         final var tokenTreasuryId = AccountID.newBuilder().accountNum(MASTER_ID).build();
-        final var letters = "abcdefghij";
-        for (int i = 0; i < NUM_TOKENS; i++) {
-            final var letter = letters.charAt(i);
+        final var number = new AtomicLong(FIRST_TOKEN_NUM);
+        DEV_TOKEN_METADATA.forEach((s, name) -> {
+            final long n = number.getAndIncrement();
+            final var symbol = s.toUpperCase();
             final var op = TokenCreateTransactionBody.newBuilder()
                     .supplyKey(MASTER_KEY)
                     .tokenType(FUNGIBLE_COMMON)
-                    .decimals(i == 3 ? 6 : RANDOM.nextInt(10))
-                    .symbol(i == 3 ? "USDC" : Strings.repeat("" + letter, 3))
-                    .name(i == 3 ? "US Dollar" : ("Token" + letter).toUpperCase())
+                    .decimals(symbol.equals("USDC") ? 6 : RANDOM.nextInt(2, 11))
+                    .symbol(symbol)
+                    .name(name)
                     .initialSupply(Long.MAX_VALUE)
                     .treasury(tokenTreasuryId)
                     .build();
             systemContext.dispatchCreation(
-                    TransactionBody.newBuilder().tokenCreation(op).build(), FIRST_TOKEN_NUM + i);
-        }
+                    TransactionBody.newBuilder().tokenCreation(op).build(), n);
+        });
     }
 
     private void setupPlexTopics(SystemContext systemContext) {
