@@ -86,17 +86,14 @@ import com.swirlds.state.lifecycle.EntityIdFactory;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
 import com.swirlds.state.lifecycle.info.NodeInfo;
 import edu.umd.cs.findbugs.annotations.NonNull;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
-import java.util.SplittableRandom;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -104,6 +101,7 @@ import java.util.function.Function;
 import java.util.stream.LongStream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -126,7 +124,8 @@ public class SystemTransactions {
 
     private static final EnumSet<ResponseCodeEnum> SUCCESSES =
             EnumSet.of(SUCCESS, SUCCESS_BUT_MISSING_EXPECTED_OPERATION);
-    private static final Consumer<Dispatch> DEFAULT_DISPATCH_ON_SUCCESS = dispatch -> {};
+    private static final Consumer<Dispatch> DEFAULT_DISPATCH_ON_SUCCESS = dispatch -> {
+    };
 
     private final InitTrigger initTrigger;
     private final BlocklistParser blocklistParser = new BlocklistParser();
@@ -190,7 +189,7 @@ public class SystemTransactions {
     /**
      * Sets up genesis state for the system.
      *
-     * @param now the current time
+     * @param now   the current time
      * @param state the state to set up
      */
     public void doGenesisSetup(@NonNull final Instant now, @NonNull final State state) {
@@ -334,11 +333,9 @@ public class SystemTransactions {
         setupPlexFeeCollector(systemContext);
     }
 
-    private static final long FIRST_ACCOUNT_NUM = 10000L;
     private static final long FIRST_TOKEN_NUM = 20000L;
     private static final long FIRST_TOPIC_NUM = 30000L;
 
-    private static final String HEXED_PUBLIC_KEY = "72d84208f4f546fffc79d31f0cbfa7352c38887efe4fe0475270e9a38f56accf";
     private static final String A4589187_PUBLIC_KEY =
             "ac228a873619e041648113a84f12079b8af8522073adc343e1a91594f0b1c05d";
     private static final String A4589188_PUBLIC_KEY =
@@ -364,25 +361,25 @@ public class SystemTransactions {
             Key.newBuilder().ed25519(Bytes.fromHex(A4589190_PUBLIC_KEY)).build(),
             4589192L,
             Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
-    private static final int NUM_ACCOUNTS = 10;
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
 
-    private static final Map<String, String> DEV_TOKEN_METADATA = Map.ofEntries(
-            Map.entry("aaa", "Token A"),
-            Map.entry("bbb", "Token B"),
-            Map.entry("ccc", "Token C"),
-            Map.entry("usdc", "USD Coin"),
-            Map.entry("ddd", "Token D"),
-            Map.entry("apy", "Aperture"),
-            Map.entry("brx", "BridgeX"),
-            Map.entry("eqd", "EquiDollar"),
-            Map.entry("nx", "Nexis"),
-            Map.entry("qbt", "Quantobit"),
-            Map.entry("seed", "Sustenance DAO"),
-            Map.entry("shd", "Shade"),
-            Map.entry("vote", "Voluntary Engine"),
-            Map.entry("wag", "We-All-GM"));
+    private static final Map<String, String> DEV_TOKEN_METADATA = new LinkedHashMap<>() {{
+        put("aaa", "Token A");
+        put("bbb", "Token B");
+        put("ccc", "Token C");
+        put("usdc", "USD Coin");
+        put("ddd", "Token D");
+        put("apy", "Aperture");
+        put("brx", "BridgeX");
+        put("eqd", "EquiDollar");
+        put("nx", "Nexis");
+        put("qbt", "Quantobit");
+        put("seed", "Sustenance DAO");
+        put("shd", "Shade");
+        put("vote", "Voluntary Engine");
+        put("wag", "We-All-GM");
+    }};
     private static final int NUM_TOKENS = DEV_TOKEN_METADATA.size();
 
     private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
@@ -446,8 +443,13 @@ public class SystemTransactions {
                     .initialSupply(Long.MAX_VALUE)
                     .treasury(tokenTreasuryId)
                     .build();
-            systemContext.dispatchCreation(
-                    TransactionBody.newBuilder().tokenCreation(op).build(), n);
+            try {
+                System.out.println("Creating synthetic token '" + symbol + "' via " + op);
+                systemContext.dispatchCreation(
+                        TransactionBody.newBuilder().tokenCreation(op).build(), n);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         });
     }
 
@@ -530,14 +532,14 @@ public class SystemTransactions {
      * If the {@link NodesConfig#minPerPeriodNodeRewardUsd()} is greater than zero, inactive nodes will receive the minimum node
      * reward.
      *
-     * @param state The state.
-     * @param now The current time.
-     * @param activeNodeIds The list of active node ids.
-     * @param perNodeReward The per node reward.
+     * @param state                The state.
+     * @param now                  The current time.
+     * @param activeNodeIds        The list of active node ids.
+     * @param perNodeReward        The per node reward.
      * @param nodeRewardsAccountId The node rewards account id.
      * @param rewardAccountBalance The reward account balance.
-     * @param minNodeReward The minimum node reward.
-     * @param rosterEntries The list of roster entries.
+     * @param minNodeReward        The minimum node reward.
+     * @param rosterEntries        The list of roster entries.
      */
     public void dispatchNodeRewards(
             @NonNull final State state,
@@ -552,7 +554,8 @@ public class SystemTransactions {
         requireNonNull(now);
         requireNonNull(activeNodeIds);
         requireNonNull(nodeRewardsAccountId);
-        final var systemContext = newSystemContext(now, state, dispatch -> {}, false);
+        final var systemContext = newSystemContext(now, state, dispatch -> {
+        }, false);
         final var activeNodeAccountIds = activeNodeIds.stream()
                 .map(id -> systemContext.networkInfo().nodeInfo(id))
                 .filter(nodeInfo -> nodeInfo != null && !nodeInfo.declineReward())
@@ -624,8 +627,8 @@ public class SystemTransactions {
      * using the given {@link AutoUpdate} function.
      *
      * @param updateFileName the name of the upgrade file
-     * @param updateParser the function to parse the upgrade file
-     * @param <T> the type of the update representation
+     * @param updateParser   the function to parse the upgrade file
+     * @param <T>            the type of the update representation
      */
     private record AutoEntityUpdate<T>(
             @NonNull AutoUpdate<T> autoUpdate,
@@ -783,13 +786,13 @@ public class SystemTransactions {
      * scheduled transaction with a {@link ResponseCodeEnum#FAIL_INVALID} transaction result, and
      * no other side effects.
      *
-     * @param state the state to execute the transaction against
-     * @param now the time to execute the transaction at
-     * @param creatorInfo the node info of the creator of the transaction
-     * @param payerId the payer of the transaction
-     * @param body the transaction to execute
+     * @param state         the state to execute the transaction against
+     * @param now           the time to execute the transaction at
+     * @param creatorInfo   the node info of the creator of the transaction
+     * @param payerId       the payer of the transaction
+     * @param body          the transaction to execute
      * @param nextEntityNum if not zero, the next entity number to use for the transaction
-     * @param onSuccess the action to take after the transaction is successfully dispatched
+     * @param onSuccess     the action to take after the transaction is successfully dispatched
      * @return the stream output from executing the transaction
      */
     private HandleOutput executeSystem(
@@ -813,8 +816,8 @@ public class SystemTransactions {
         try {
             final var controlledNum = (nextEntityNum != 0)
                     ? dispatch.stack()
-                            .getWritableStates(EntityIdService.NAME)
-                            .<EntityNumber>getSingleton(ENTITY_ID_STATE_KEY)
+                    .getWritableStates(EntityIdService.NAME)
+                    .<EntityNumber>getSingleton(ENTITY_ID_STATE_KEY)
                     : null;
             if (controlledNum != null) {
                 controlledNum.put(new EntityNumber(nextEntityNum - 1));
