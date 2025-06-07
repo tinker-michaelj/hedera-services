@@ -23,7 +23,6 @@ import static com.swirlds.platform.system.InitTrigger.GENESIS;
 import static java.util.Objects.requireNonNull;
 import static org.hiero.consensus.roster.RosterUtils.formatNodeName;
 
-import com.google.common.base.Strings;
 import com.goterl.lazysodium.utils.HexMessageEncoder;
 import com.hedera.hapi.node.addressbook.NodeCreateTransactionBody;
 import com.hedera.hapi.node.addressbook.NodeUpdateTransactionBody;
@@ -86,7 +85,6 @@ import com.swirlds.state.lifecycle.EntityIdFactory;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
 import com.swirlds.state.lifecycle.info.NodeInfo;
 import edu.umd.cs.findbugs.annotations.NonNull;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -101,7 +99,6 @@ import java.util.function.Function;
 import java.util.stream.LongStream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -124,8 +121,7 @@ public class SystemTransactions {
 
     private static final EnumSet<ResponseCodeEnum> SUCCESSES =
             EnumSet.of(SUCCESS, SUCCESS_BUT_MISSING_EXPECTED_OPERATION);
-    private static final Consumer<Dispatch> DEFAULT_DISPATCH_ON_SUCCESS = dispatch -> {
-    };
+    private static final Consumer<Dispatch> DEFAULT_DISPATCH_ON_SUCCESS = dispatch -> {};
 
     private final InitTrigger initTrigger;
     private final BlocklistParser blocklistParser = new BlocklistParser();
@@ -364,22 +360,24 @@ public class SystemTransactions {
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
 
-    private static final Map<String, String> DEV_TOKEN_METADATA = new LinkedHashMap<>() {{
-        put("aaa", "Token A");
-        put("bbb", "Token B");
-        put("ccc", "Token C");
-        put("usdc", "USD Coin");
-        put("ddd", "Token D");
-        put("apy", "Aperture");
-        put("brx", "BridgeX");
-        put("eqd", "EquiDollar");
-        put("nx", "Nexis");
-        put("qbt", "Quantobit");
-        put("seed", "Sustenance DAO");
-        put("shd", "Shade");
-        put("vote", "Voluntary Engine");
-        put("wag", "We-All-GM");
-    }};
+    private static final Map<String, String> DEV_TOKEN_METADATA = new LinkedHashMap<>() {
+        {
+            put("aaa", "Token A");
+            put("bbb", "Token B");
+            put("ccc", "Token C");
+            put("usdc", "USD Coin");
+            put("ddd", "Token D");
+            put("apy", "Aperture");
+            put("brx", "BridgeX");
+            put("eqd", "EquiDollar");
+            put("nx", "Nexis");
+            put("qbt", "Quantobit");
+            put("seed", "Sustenance DAO");
+            put("shd", "Shade");
+            put("vote", "Voluntary Engine");
+            put("wag", "We-All-GM");
+        }
+    };
     private static final int NUM_TOKENS = DEV_TOKEN_METADATA.size();
 
     private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
@@ -402,7 +400,7 @@ public class SystemTransactions {
     }
 
     private static final String FEE_COLLECTOR_INITCODE_LOC =
-            "/Users/michaeltinker/dev/lambdaplex/lambdaplex-contracts/build/LambdaplexFeeCollector.bin";
+            "/Users/michaeltinker/dev/llabs/lambdaplex/contracts/build/LambdaplexFeeCollector.bin";
 
     private void setupPlexFeeCollector(SystemContext systemContext) {
         final byte[] initcode;
@@ -552,8 +550,7 @@ public class SystemTransactions {
         requireNonNull(now);
         requireNonNull(activeNodeIds);
         requireNonNull(nodeRewardsAccountId);
-        final var systemContext = newSystemContext(now, state, dispatch -> {
-        }, false);
+        final var systemContext = newSystemContext(now, state, dispatch -> {}, false);
         final var activeNodeAccountIds = activeNodeIds.stream()
                 .map(id -> systemContext.networkInfo().nodeInfo(id))
                 .filter(nodeInfo -> nodeInfo != null && !nodeInfo.declineReward())
@@ -742,8 +739,10 @@ public class SystemTransactions {
                 if (streamMode != BLOCKS) {
                     blockRecordManager.startUserTransaction(now, state);
                 }
+                // <PLEX>
+                final var payerId = body.transactionIDOrThrow().accountID();
                 final var handleOutput =
-                        executeSystem(state, now, creatorInfo, systemAdminId, body, entityNum, config, onSuccess);
+                        executeSystem(state, now, creatorInfo, payerId, body, entityNum, config, onSuccess);
                 if (streamMode != BLOCKS) {
                     final var records =
                             ((LegacyListRecordSource) handleOutput.recordSourceOrThrow()).precomputedRecords();
@@ -814,8 +813,8 @@ public class SystemTransactions {
         try {
             final var controlledNum = (nextEntityNum != 0)
                     ? dispatch.stack()
-                    .getWritableStates(EntityIdService.NAME)
-                    .<EntityNumber>getSingleton(ENTITY_ID_STATE_KEY)
+                            .getWritableStates(EntityIdService.NAME)
+                            .<EntityNumber>getSingleton(ENTITY_ID_STATE_KEY)
                     : null;
             if (controlledNum != null) {
                 controlledNum.put(new EntityNumber(nextEntityNum - 1));

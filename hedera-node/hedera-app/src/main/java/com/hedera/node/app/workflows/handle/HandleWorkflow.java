@@ -371,7 +371,11 @@ public class HandleWorkflow {
         if (isGenesis) {
             final var genesisEventTime = round.iterator().next().getConsensusTimestamp();
             logger.info("Doing genesis setup before {}", genesisEventTime);
-            systemTransactions.doGenesisSetup(genesisEventTime, state);
+            try {
+                systemTransactions.doGenesisSetup(genesisEventTime, state);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             transactionsDispatched = true;
             if (streamMode != RECORDS) {
                 blockStreamManager.confirmPendingWorkFinished();
