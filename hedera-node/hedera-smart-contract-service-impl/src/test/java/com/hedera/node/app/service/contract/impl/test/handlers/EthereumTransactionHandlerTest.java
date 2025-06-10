@@ -256,7 +256,7 @@ class EthereumTransactionHandlerTest {
         final var expectedOutcome = new CallOutcome(
                 expectedResult, SUCCESS_RESULT_WITH_SIGNER_NONCE.finalStatus(), CALLED_CONTRACT_ID, null, null, null);
 
-        given(createRecordBuilder.contractID(CALLED_CONTRACT_ID)).willReturn(createRecordBuilder);
+        given(createRecordBuilder.createdContractID(CALLED_CONTRACT_ID)).willReturn(createRecordBuilder);
         given(createRecordBuilder.contractCreateResult(expectedResult)).willReturn(createRecordBuilder);
         given(createRecordBuilder.withCommonFieldsSetFrom(expectedOutcome)).willReturn(createRecordBuilder);
         given(recordBuilder.ethereumHash(Bytes.wrap(ETH_DATA_WITHOUT_TO_ADDRESS.getEthereumHash())))

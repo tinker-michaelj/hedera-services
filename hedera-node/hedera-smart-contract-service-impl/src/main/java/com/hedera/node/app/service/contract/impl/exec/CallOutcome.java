@@ -134,7 +134,7 @@ public record CallOutcome(
      */
     public void addCreateDetailsTo(@NonNull final ContractCreateStreamBuilder recordBuilder) {
         requireNonNull(recordBuilder);
-        recordBuilder.contractID(recipientIdIfCreated());
+        recordBuilder.createdContractID(recipientIdIfCreated());
         recordBuilder.contractCreateResult(result);
         recordBuilder.withCommonFieldsSetFrom(this);
     }
