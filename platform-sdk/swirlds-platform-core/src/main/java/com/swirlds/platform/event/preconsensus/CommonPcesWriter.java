@@ -13,7 +13,6 @@ import java.io.UncheckedIOException;
 import java.util.Objects;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.hiero.consensus.config.EventConfig;
 import org.hiero.consensus.model.event.PlatformEvent;
 import org.hiero.consensus.model.hashgraph.EventWindow;
 
@@ -117,7 +116,6 @@ public class CommonPcesWriter {
         this.fileManager = Objects.requireNonNull(fileManager, "fileManager is required");
 
         final PcesConfig pcesConfig = platformContext.getConfiguration().getConfigData(PcesConfig.class);
-        final EventConfig eventConfig = platformContext.getConfiguration().getConfigData(EventConfig.class);
 
         previousSpan = pcesConfig.bootstrapSpan();
         bootstrapSpanOverlapFactor = pcesConfig.bootstrapSpanOverlapFactor();
