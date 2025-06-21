@@ -342,6 +342,8 @@ public class SystemTransactions {
             "00239c97975a48b7a9500d30c71f4b6445e73d8b246a8d1a986bb493d50ef0c7";
     private static final String A4589192_PUBLIC_KEY =
             "96accd0d08b2a0883d5fa630e53ac8632da6578f1f049544e943bc281ae4e8ac";
+    private static final String A9266133_PUBLIC_KEY =
+            "03ac69bc0610b41fee3b8f66961138e8955685a723ef08d4b1d57a179548ed0cc8";
     private static final long MASTER_ID = 4589187L;
     private static final long FEE_COLLECTOR_ID = 1234567L;
     private static final Key MASTER_KEY =
@@ -356,7 +358,9 @@ public class SystemTransactions {
             4589190L,
             Key.newBuilder().ed25519(Bytes.fromHex(A4589190_PUBLIC_KEY)).build(),
             4589192L,
-            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build());
+            Key.newBuilder().ed25519(Bytes.fromHex(A4589192_PUBLIC_KEY)).build(),
+            9266133L,
+            Key.newBuilder().ecdsaSecp256k1(Bytes.fromHex(A9266133_PUBLIC_KEY)).build());
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
 
