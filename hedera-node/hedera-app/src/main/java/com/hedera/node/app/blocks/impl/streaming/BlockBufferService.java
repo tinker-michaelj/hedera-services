@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.hedera.node.app.blocks.impl.streaming;
 
-import static com.hedera.node.app.blocks.impl.streaming.BlockBufferService.BlockStreamQueueItemType.BLOCK_ITEM;
 import static java.util.Objects.requireNonNull;
 
 import com.hedera.hapi.block.stream.BlockItem;
@@ -15,10 +14,9 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Iterator;
-import java.util.Queue;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,6 +24,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -38,21 +38,18 @@ import org.apache.logging.log4j.Logger;
  *     <li>Pruning the buffer based on TTL and saturation</li>
  * </ul>
  */
+@Singleton
 public class BlockBufferService {
     private static final Logger logger = LogManager.getLogger(BlockBufferService.class);
 
     /**
-     * Buffer that stores recent blocks. This buffer is unbounded, however when opening a new block the buffer will be
-     * pruned. Generally speaking, the buffer should contain only blocks that are recent (that is within the configured
-     * {@link BlockStreamConfig#blockBufferTtl() TTL}) and have yet to be acknowledged. There may be cases where older
-     * blocks still exist in the buffer if they are unacknowledged, but once they are acknowledged they will be pruned
-     * the next time {@link #openBlock(long)} is invoked.
+     * Buffer that stores recent blocks. This buffer is unbounded, however it is technically capped because back
+     * pressure will prevent blocks from being created. Generally speaking, the buffer should contain only blocks that
+     * are recent (that is within the configured {@link BlockStreamConfig#blockBufferTtl() TTL}) and have yet to be
+     * acknowledged. There may be cases where older blocks still exist in the buffer if they are unacknowledged, but
+     * once they are acknowledged they will be pruned the next time {@link #openBlock(long)} is invoked.
      */
-    private final Queue<BlockState> blockBuffer = new ConcurrentLinkedQueue<>();
-    /**
-     * Map for quickly looking up blocks by their ID/number. This will get pruned along with the buffer periodically.
-     */
-    private final ConcurrentMap<Long, BlockState> blockStatesById = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, BlockState> blockBuffer = new ConcurrentHashMap<>();
     /**
      * Flag to indicate if the buffer contains blocks that have expired but are still unacknowledged.
      */
@@ -74,13 +71,13 @@ public class BlockBufferService {
      * blocking/backpressure is needed. If the value is {@code false} then it means this future was completed but
      * another one took its place and backpressure is still enabled.
      */
-    private static final AtomicReference<CompletableFuture<Boolean>> backpressureCompletableFutureRef =
+    private final AtomicReference<CompletableFuture<Boolean>> backpressureCompletableFutureRef =
             new AtomicReference<>();
     /**
      * The most recent produced block number (i.e. the last block to be opened). A value of -1 indicates that no blocks
      * have been open/produced yet.
      */
-    private long lastProducedBlockNumber = -1;
+    private final AtomicLong lastProducedBlockNumber = new AtomicLong(-1);
     /**
      * Mechanism to retrieve configuration properties related to block-node communication.
      */
@@ -94,14 +91,9 @@ public class BlockBufferService {
      */
     private final BlockStreamMetrics blockStreamMetrics;
     /**
-     * Queue that contains pending items that need to be added to blocks and converted to requests for eventual delivery
-     * to block nodes.
-     */
-    private final Queue<BlockStreamQueueItem> blockStreamItemQueue = new ConcurrentLinkedQueue<>();
-    /**
      * Flag that indicates if streaming to block nodes is enabled. This flag is set once upon startup and cannot change.
      */
-    private static final AtomicBoolean isStreamingEnabled = new AtomicBoolean(false);
+    private final AtomicBoolean isStreamingEnabled = new AtomicBoolean(false);
 
     /**
      * Creates a new BlockBufferService with the given configuration.
@@ -109,6 +101,7 @@ public class BlockBufferService {
      * @param configProvider the configuration provider
      * @param blockStreamMetrics metrics factory for monitoring block streaming
      */
+    @Inject
     public BlockBufferService(
             @NonNull final ConfigProvider configProvider, @NonNull final BlockStreamMetrics blockStreamMetrics) {
         this.configProvider = configProvider;
@@ -121,55 +114,14 @@ public class BlockBufferService {
         }
     }
 
+    /**
+     * @return true if streaming to block nodes is enabled, else false
+     */
     private boolean streamToBlockNodesEnabled() {
         return configProvider
                 .getConfiguration()
                 .getConfigData(BlockStreamConfig.class)
                 .streamToBlockNodes();
-    }
-
-    /**
-     * The type of item that can be in the block stream queue.
-     */
-    public enum BlockStreamQueueItemType {
-        /**
-         * Indicates that the item is a block item.
-         */
-        BLOCK_ITEM,
-        /**
-         * Indicates that the item is a pre-block proof action.
-         * The consumer of this item should take action to perform any actions that need to be done before the producer
-         * adds the BlockProof to the queue.
-         */
-        PRE_BLOCK_PROOF_ACTION,
-    }
-
-    /**
-     * Represents an item in the block stream queue between the handle thread and block stream worker thread.
-     * The type of item is represented by the {@link BlockStreamQueueItemType} enum and may indicate an action needs to be taken.
-     */
-    public record BlockStreamQueueItem(
-            long blockNumber,
-            @NonNull BlockStreamQueueItemType blockStreamQueueItemType,
-            @Nullable BlockItem blockItem) {
-
-        /**
-         * Creates a new BlockStreamQueueItem with the given block number and block item.
-         * @param blockNumber the block number
-         * @param blockItem the block item
-         */
-        public BlockStreamQueueItem(final long blockNumber, final BlockItem blockItem) {
-            this(blockNumber, BLOCK_ITEM, blockItem);
-        }
-
-        /**
-         * Creates a new BlockStreamQueueItem with the given block number and block stream queue item type.
-         * @param blockNumber the block number
-         * @param blockStreamQueueItemType the block stream queue item type
-         */
-        public BlockStreamQueueItem(final long blockNumber, final BlockStreamQueueItemType blockStreamQueueItemType) {
-            this(blockNumber, blockStreamQueueItemType, null);
-        }
     }
 
     /**
@@ -223,24 +175,32 @@ public class BlockBufferService {
         if (!isStreamingEnabled.get()) {
             return;
         }
-        if (blockNumber < 0) throw new IllegalArgumentException("Block number must be non-negative");
 
-        if (this.lastProducedBlockNumber >= blockNumber) {
+        if (blockNumber < 0) {
+            throw new IllegalArgumentException("Block number must be non-negative");
+        }
+
+        final long lastAcked = highestAckedBlockNumber.get();
+        if (blockNumber <= lastAcked) {
             logger.error(
-                    "Attempted to open a new block with number {}, but a block with the same or later number "
-                            + "(latest: {}) has already been opened",
+                    "Attempted to open block {}, but a later block (lastAcked={}) has already been acknowledged",
                     blockNumber,
-                    this.lastProducedBlockNumber);
-            throw new IllegalStateException("Attempted to open a new block with number " + blockNumber
-                    + ", but a block with the same or later number (latest: " + this.lastProducedBlockNumber
-                    + ") has already been opened");
+                    lastAcked);
+            throw new IllegalStateException("Attempted to open block " + blockNumber + ", but a later block (lastAcked="
+                    + lastAcked + ") has already been acknowledged");
+        }
+
+        final BlockState existingBlock = blockBuffer.get(blockNumber);
+        if (existingBlock != null && existingBlock.isBlockProofSent()) {
+            logger.error("Attempted to open block {}, but this block already has the block proof sent", blockNumber);
+            throw new IllegalStateException("Attempted to open block " + blockNumber + ", but this block already has "
+                    + "the block proof sent");
         }
 
         // Create a new block state
         final BlockState blockState = new BlockState(blockNumber);
-        blockBuffer.add(blockState);
-        blockStatesById.put(blockNumber, blockState);
-        this.lastProducedBlockNumber = blockNumber;
+        blockBuffer.put(blockNumber, blockState);
+        lastProducedBlockNumber.updateAndGet(old -> Math.max(old, blockNumber));
         blockStreamMetrics.setProducingBlockNumber(blockNumber);
         blockNodeConnectionManager.openBlock(blockNumber);
     }
@@ -261,7 +221,7 @@ public class BlockBufferService {
         if (blockState == null) {
             throw new IllegalStateException("Block state not found for block " + blockNumber);
         }
-        blockStreamItemQueue.add(new BlockBufferService.BlockStreamQueueItem(blockNumber, blockItem));
+        blockState.addItem(blockItem);
     }
 
     /**
@@ -279,9 +239,7 @@ public class BlockBufferService {
             throw new IllegalStateException("Block state not found for block " + blockNumber);
         }
 
-        blockState.setCompletionTimestamp();
-
-        logger.debug("Block {} completion timestamp set to {}", blockNumber, blockState.completionTimestamp());
+        blockState.closeBlock();
     }
 
     /**
@@ -291,7 +249,7 @@ public class BlockBufferService {
      * @return the block state, or null if no block state exists for the given block number
      */
     public @Nullable BlockState getBlockState(final long blockNumber) {
-        return blockStatesById.get(blockNumber);
+        return blockBuffer.get(blockNumber);
     }
 
     /**
@@ -303,24 +261,6 @@ public class BlockBufferService {
      */
     public boolean isAcked(final long blockNumber) {
         return highestAckedBlockNumber.get() >= blockNumber;
-    }
-
-    /**
-     * Creates a new request from the current items in the block prior to BlockProof if there are any.
-     * @param blockNumber the block number
-     */
-    public void streamPreBlockProofItems(final long blockNumber) {
-        if (!isStreamingEnabled.get()) {
-            return;
-        }
-
-        final BlockState blockState = getBlockState(blockNumber);
-        if (blockState == null) {
-            throw new IllegalStateException("Block state not found for block " + blockNumber);
-        }
-
-        blockStreamItemQueue.add(
-                new BlockStreamQueueItem(blockNumber, BlockStreamQueueItemType.PRE_BLOCK_PROOF_ACTION));
     }
 
     /**
@@ -342,15 +282,15 @@ public class BlockBufferService {
      *
      * @return the current block number or -1 if no blocks have been opened yet
      */
-    public long getBlockNumber() {
-        return lastProducedBlockNumber;
+    public long getLastBlockNumberProduced() {
+        return lastProducedBlockNumber.get();
     }
 
     /**
      * Ensures that there is enough capacity in the block buffer to permit a new block being created. If there is not
      * enough capacity - i.e. the buffer is saturated - then this method will block until there is enough capacity.
      */
-    public static void ensureNewBlocksPermitted() {
+    public void ensureNewBlocksPermitted() {
         if (!isStreamingEnabled.get()) {
             return;
         }
@@ -384,35 +324,41 @@ public class BlockBufferService {
     private @NonNull PruneResult pruneBuffer() {
         final Duration ttl = blockBufferTtl();
         final Instant cutoffInstant = Instant.now().minus(ttl);
-        final Iterator<BlockState> it = blockBuffer.iterator();
+        final Iterator<Map.Entry<Long, BlockState>> it = blockBuffer.entrySet().iterator();
         final long highestBlockAcked = highestAckedBlockNumber.get();
         /*
         Calculate the ideal max buffer size. This is calculated as the block buffer TTL (e.g. 5 minutes) divided by the
         block period (e.g. 2 seconds). This gives us an ideal number of blocks in the buffer.
          */
-        final long idealMaxBufferSize = ttl.dividedBy(blockPeriod());
+        final Duration blockPeriod = blockPeriod();
+        final long idealMaxBufferSize =
+                blockPeriod.isZero() || blockPeriod.isNegative() ? 150 : ttl.dividedBy(blockPeriod());
         int numPruned = 0;
         int numChecked = 0;
         int numPendingAck = 0;
         final AtomicReference<Instant> oldestUnackedTimestamp = new AtomicReference<>(Instant.MAX);
 
         while (it.hasNext()) {
-            final BlockState block = it.next();
+            final Map.Entry<Long, BlockState> blockEntry = it.next();
+            final BlockState block = blockEntry.getValue();
             ++numChecked;
 
-            if (block.completionTimestamp() != null) {
-                if (block.blockNumber() <= highestBlockAcked) {
-                    // this block is eligible for pruning if it is old enough
-                    if (block.completionTimestamp().isBefore(cutoffInstant)) {
-                        blockStatesById.remove(block.blockNumber());
-                        it.remove();
-                        ++numPruned;
-                    }
-                } else {
-                    ++numPendingAck;
-                    oldestUnackedTimestamp.updateAndGet(current ->
-                            current.compareTo(block.completionTimestamp()) < 0 ? current : block.completionTimestamp());
+            final Instant closedTimestamp = block.closedTimestamp();
+            if (closedTimestamp == null) {
+                // the block is not finished yet, so skip checking it
+                continue;
+            }
+
+            if (block.blockNumber() <= highestBlockAcked) {
+                // this block is eligible for pruning if it is old enough
+                if (closedTimestamp.isBefore(cutoffInstant)) {
+                    it.remove();
+                    ++numPruned;
                 }
+            } else {
+                ++numPendingAck;
+                oldestUnackedTimestamp.updateAndGet(
+                        current -> current.compareTo(closedTimestamp) < 0 ? current : closedTimestamp);
             }
         }
 
@@ -581,14 +527,6 @@ public class BlockBufferService {
                 scheduleNextPruning();
             }
         }
-    }
-
-    /**
-     * Gets the block stream queue.
-     * @return the block stream queue
-     */
-    public Queue<BlockStreamQueueItem> getBlockStreamItemQueue() {
-        return blockStreamItemQueue;
     }
 
     /**

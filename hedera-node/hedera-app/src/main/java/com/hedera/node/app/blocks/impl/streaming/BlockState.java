@@ -2,12 +2,23 @@
 package com.hedera.node.app.blocks.impl.streaming;
 
 import com.hedera.hapi.block.stream.BlockItem;
+import com.hedera.hapi.block.stream.output.StateChange;
+import com.hedera.hapi.block.stream.output.StateChanges;
+import com.hedera.hapi.node.state.blockstream.BlockStreamInfo;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hiero.block.api.BlockItemSet;
@@ -26,11 +37,109 @@ import org.hiero.block.api.PublishStreamRequest;
  */
 public class BlockState {
     private static final Logger logger = LogManager.getLogger(BlockState.class);
+
+    /**
+     * Enum representing the state of a block item.
+     */
+    enum ItemState {
+        /**
+         * The item hasn't been encountered yet.
+         */
+        NIL,
+        /**
+         * The item has been added to the pending items queue, but not yet included in a request.
+         */
+        ADDED,
+        /**
+         * The item has been included - or packed - into a request.
+         */
+        PACKED,
+        /**
+         * The item has been sent to a block node.
+         */
+        SENT
+    }
+
+    /**
+     * Simple record for tracking request information, in particular if a given request has been sent to a block node.
+     *
+     * @param index the index (starting with 0) of the request
+     * @param request the actual request object that gets sent to the block node
+     * @param isSent flag indicating if this request has been sent to a block node
+     */
+    record RequestWrapper(int index, PublishStreamRequest request, AtomicBoolean isSent) {}
+
+    /**
+     * Record for capturing information specific to a item, such as what request it is associated with and what state
+     * the item is in.
+     *
+     * @param state the current state of the item (e.g. not seen vs sent)
+     * @param requestIndex the index of the request the item is associated with, else -1 if it hasn't been assigned to
+     *                     a request yet
+     */
+    record ItemInfo(AtomicReference<ItemState> state, AtomicInteger requestIndex) {
+        ItemInfo() {
+            this(new AtomicReference<>(ItemState.NIL), new AtomicInteger(-1));
+        }
+
+        /**
+         * Marks this item as added to the block state.
+         */
+        boolean addedInBlockState() {
+            return state.compareAndSet(ItemState.NIL, ItemState.ADDED);
+        }
+
+        /**
+         * Marks this item as being packed in the specified request.
+         *
+         * @param requestIdx index of the request in which this item was included - or packed - in
+         */
+        boolean packedInRequest(final int requestIdx) {
+            if (state.compareAndSet(ItemState.ADDED, ItemState.PACKED)) {
+                requestIndex.set(requestIdx);
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /**
+     * The block number associated with this object.
+     */
     private final long blockNumber;
-    private final List<BlockItem> items = new ArrayList<>();
-    private final List<PublishStreamRequest> requests = new ArrayList<>();
-    private final AtomicBoolean requestsCreated = new AtomicBoolean(false);
-    private Instant closedTimestamp = null;
+    /**
+     * Queue of items that are added to this block, but haven't yet been included in a request for delivery. As items
+     * are added requests, they will be removed from this queue. Note: This must be a FIFO (first-in, first-out)
+     * structure to ensure ordering.
+     */
+    private final Queue<BlockItem> pendingItems = new ConcurrentLinkedQueue<>();
+    /**
+     * Map containing requests generated for this block. The key is the request index (starting with 0) and the value
+     * is the wrapped request.
+     */
+    private final ConcurrentMap<Integer, RequestWrapper> requestsByIndex = new ConcurrentHashMap<>();
+    /**
+     * Counter used to determine the index of requests created.
+     */
+    private final AtomicInteger requestIdxCtr = new AtomicInteger(0);
+    /**
+     * The timestamp in which this block was closed. A closed block should not receive any more items and is considered
+     * "final".
+     */
+    private final AtomicReference<Instant> closedTimestamp = new AtomicReference<>();
+    /**
+     * Object to track the state of the block header item.
+     */
+    private final ItemInfo headerItemInfo = new ItemInfo();
+    /**
+     * Object to track the state of the block proof item.
+     */
+    private final ItemInfo proofItemInfo = new ItemInfo();
+    /**
+     * Object to track the state of the pre-proof state change item. This item marks the last item before the block
+     * proof is generated.
+     */
+    private final ItemInfo preProofItemInfo = new ItemInfo();
 
     /**
      * Create a new block state for the specified block number.
@@ -55,16 +164,44 @@ public class BlockState {
      * @param item the item to add
      */
     public void addItem(final BlockItem item) {
-        items.add(item);
+        if (item == null) {
+            return;
+        }
+
+        if (closedTimestamp.get() != null) {
+            throw new IllegalStateException("Block is closed; adding more items is not permitted");
+        }
+
+        if (item.hasBlockHeader() && !headerItemInfo.addedInBlockState()) {
+            logger.warn(
+                    "[Block {}] Block header item added, but block header already encountered (state={})",
+                    blockNumber,
+                    headerItemInfo.state.get());
+        } else if (item.hasBlockProof() && !proofItemInfo.addedInBlockState()) {
+            logger.warn(
+                    "[Block {}] Block proof item added, but block proof already encountered (state={})",
+                    blockNumber,
+                    proofItemInfo.state.get());
+        } else if (item.hasStateChanges()
+                && isPreProofItemReceived(item.stateChangesOrElse(StateChanges.DEFAULT))
+                && !preProofItemInfo.addedInBlockState()) {
+            logger.warn(
+                    "[Block {}] Pre-proof state change item added, but pre-proof state change already encountered (state={})",
+                    blockNumber,
+                    preProofItemInfo.state.get());
+        }
+
+        pendingItems.add(item);
     }
 
     /**
-     * Get the size of the list of PublishStreamRequests
+     * Get the number of requests that have been created for this block up to the time this method is invoked.
+     * Additional requests may still be created (e.g. if more items are added to the block.)
      *
-     * @return the size of the list of PublishStreamRequests
+     * @return the number of requests that have been created for this block
      */
-    public int requestsSize() {
-        return requests.size();
+    public int numRequestsCreated() {
+        return requestsByIndex.size();
     }
 
     /**
@@ -74,36 +211,26 @@ public class BlockState {
      * @return the request at the given index
      */
     public @Nullable PublishStreamRequest getRequest(final int index) {
-        if (index < 0 || requests.isEmpty()) {
-            return null;
+        final RequestWrapper rs = requestsByIndex.get(index);
+        return rs == null ? null : rs.request;
+    }
+
+    /**
+     * Mark this block as closed. No additional items can be added to this block after it is closed.
+     */
+    public void closeBlock() {
+        final Instant now = Instant.now();
+
+        if (closedTimestamp.compareAndSet(null, now)) {
+            logger.debug("[Block {}] closed at {}", blockNumber, now);
+        } else {
+            logger.warn(
+                    "[Block {}] Attempted to close block at {}, but this block was already closed at {}. "
+                            + "Ignoring new close attempt.",
+                    blockNumber,
+                    now,
+                    closedTimestamp.get());
         }
-
-        return requests.get(index);
-    }
-
-    /**
-     * Check if the block is complete. A block is considered complete
-     * when all its items including the block proof have been processed into requests.
-     *
-     * @return true if the block is complete, false otherwise
-     */
-    public boolean requestsCompleted() {
-        return requestsCreated.get();
-    }
-
-    /**
-     * Indicates the BlockState has been populated with all PublishStreamRequests.
-     * This should be called after the block proof has been added and all items processed.
-     */
-    public void setRequestsCompleted() {
-        this.requestsCreated.set(true);
-    }
-
-    /**
-     * Sets the completion time of the block to now.
-     */
-    public void setCompletionTimestamp() {
-        this.closedTimestamp = Instant.now();
     }
 
     /**
@@ -111,60 +238,155 @@ public class BlockState {
      *
      * @return the completion time, or null if the block is not complete
      */
-    public Instant completionTimestamp() {
-        return closedTimestamp;
+    public @Nullable Instant closedTimestamp() {
+        return closedTimestamp.get();
     }
 
     /**
-     * Create a new PublishStreamRequest from the current items in the BlockState.
-     * The request will include up to batchSize items or fewer if a block proof is included.
+     * Processes any pending items associated with this block and assigns them to one or more requests that can be sent
+     * to a block node.
      *
-     * @param batchSize the size of the batch to create
-     * @param forceCreation if true, create a request even if the batch size is not met
+     * @param batchSize the maximum number of items to include in the request; if this value is less than 1 then the
+     *                  batch size is set to 1
      */
-    public void createRequestFromCurrentItems(final int batchSize, final boolean forceCreation) {
-        final int maxItems = Math.max(1, batchSize); // if batchSize is less than 1, set the size to 1
-        final List<BlockItem> blockItems = new ArrayList<>(maxItems);
-
-        if (items.isEmpty()) {
-            return;
+    public void processPendingItems(final int batchSize) {
+        if (pendingItems.isEmpty()) {
+            return; // nothing to do
         }
 
-        if (items.size() >= maxItems || forceCreation) {
-            final Iterator<BlockItem> it = items.iterator();
-            while (it.hasNext() && blockItems.size() != maxItems) {
-                blockItems.add(it.next());
-                it.remove();
+        final int maxItems = Math.max(1, batchSize); // if batch size is less than 1, set the size to 1
+
+        /*
+         * There are four scenarios in which we want to create a new request:
+         * 1. The number of items equals the batch size
+         * 2. The new request would include the block header, regardless if it matches the batch size
+         * 3. The new request would include any pending items before the block proof is created (block proof could take
+         *    longer to process)
+         * 4. The new request contains the block proof
+         */
+
+        final boolean hasEnoughItemsForBatch = pendingItems.size() >= maxItems;
+        final boolean headerNeedsToBeSent = ItemState.ADDED == headerItemInfo.state.get();
+        final boolean proofNeedsToBeSent = ItemState.ADDED == proofItemInfo.state.get();
+        final boolean preProofNeedsToBeSent = ItemState.ADDED == preProofItemInfo.state.get();
+
+        if (!hasEnoughItemsForBatch && !headerNeedsToBeSent && !proofNeedsToBeSent && !preProofNeedsToBeSent) {
+            return; // nothing ready to be sent
+        }
+
+        final List<BlockItem> blockItems = new ArrayList<>(maxItems);
+        final int index = requestIdxCtr.getAndIncrement();
+        final Iterator<BlockItem> it = pendingItems.iterator();
+
+        boolean forceCreation = false;
+        while (it.hasNext()) {
+            final BlockItem item = it.next();
+            blockItems.add(item);
+            it.remove();
+
+            if (item.hasBlockHeader()) {
+                if (headerItemInfo.packedInRequest(index)) {
+                    logger.trace("[Block {}] Block header packed in request #{}", blockNumber, index);
+                } else {
+                    logger.warn(
+                            "[Block {}] Block header item was not yet added (state={})",
+                            blockNumber,
+                            headerItemInfo.state.get());
+                }
+            } else if (item.hasStateChanges()
+                    && isPreProofItemReceived(item.stateChangesOrElse(StateChanges.DEFAULT))) {
+                if (preProofItemInfo.packedInRequest(index)) {
+                    forceCreation = true;
+                    logger.trace("[Block {}] Pre-proof block state change packed in request #{}", blockNumber, index);
+                } else {
+                    logger.warn(
+                            "[Block {}] Pre-proof block state change was not yet added (state={})",
+                            blockNumber,
+                            preProofItemInfo.state.get());
+                }
+            } else if (item.hasBlockProof()) {
+                if (proofItemInfo.packedInRequest(index)) {
+                    forceCreation = true;
+                    logger.trace("[Block {}] Block proof packed in request #{}", blockNumber, index);
+                } else {
+                    logger.warn(
+                            "[Block {}] Block proof was not yet added (state={})",
+                            blockNumber,
+                            proofItemInfo.state.get());
+                }
+            }
+
+            if (!it.hasNext() || blockItems.size() == maxItems || forceCreation) {
+                break;
             }
         }
 
-        if (blockItems.isEmpty()) {
-            return;
-        }
-
-        // Create BlockItemSet by adding all items at once
-        final BlockItemSet itemSet =
+        final BlockItemSet bis =
                 BlockItemSet.newBuilder().blockItems(blockItems).build();
+        final PublishStreamRequest psr =
+                PublishStreamRequest.newBuilder().blockItems(bis).build();
+        final RequestWrapper rs = new RequestWrapper(index, psr, new AtomicBoolean(false));
+        requestsByIndex.put(index, rs);
 
-        // Create the request and add it to the list
-        final PublishStreamRequest request =
-                PublishStreamRequest.newBuilder().blockItems(itemSet).build();
+        logger.debug("[Block {}] Created new request (index={}, numItems={})", blockNumber, index, blockItems.size());
 
-        logger.debug("Added request to block {} - request count now: {}", blockNumber, requests.size());
-        requests.add(request);
-
-        if (!items.isEmpty()) {
-            createRequestFromCurrentItems(batchSize, forceCreation);
+        if (!pendingItems.isEmpty()) {
+            processPendingItems(batchSize);
         }
+    }
+
+    /**
+     * @return true if the proof for this block has been sent to a block node, else false
+     */
+    public boolean isBlockProofSent() {
+        return ItemState.SENT == proofItemInfo.state.get();
+    }
+
+    /**
+     * Mark the request, specified by the index, as being successfully sent to a block node.
+     *
+     * @param requestIndex the index of the request to mark as sent
+     */
+    public void markRequestSent(final int requestIndex) {
+        final RequestWrapper wrapper = requestsByIndex.get(requestIndex);
+        if (wrapper == null) {
+            throw new IllegalArgumentException("Invalid request index: " + requestIndex);
+        }
+        wrapper.isSent.set(true);
+
+        // update if the block proof was sent as part of the request
+        if (requestIndex == proofItemInfo.requestIndex.get()) {
+            proofItemInfo.state.set(ItemState.SENT);
+        }
+    }
+
+    /**
+     * Checks if the specified state changes contains block stream info value, which is an indication that all non-proof
+     * items have been submitted for the block and only the block proof is remaining.
+     *
+     * @param stateChanges the changes associated with the item
+     * @return true if this state changes include the block stream info value, else false
+     */
+    private boolean isPreProofItemReceived(@NonNull final StateChanges stateChanges) {
+        return stateChanges.stateChanges().stream()
+                .map(StateChange::singletonUpdate)
+                .filter(Objects::nonNull)
+                .anyMatch(update -> update.hasBlockStreamInfoValue()
+                        && update.blockStreamInfoValueOrElse(BlockStreamInfo.DEFAULT)
+                                        .blockNumber()
+                                != -1);
     }
 
     @Override
     public String toString() {
-        return "BlockState{" + "blockNumber="
-                + blockNumber + ", items="
-                + items + ", requests="
-                + requests + ", requestsCreated="
-                + requestsCreated + ", closedTimestamp="
-                + closedTimestamp + '}';
+        return "BlockState {"
+                + "blockNumber=" + blockNumber
+                + ", closedTimestamp=" + closedTimestamp.get()
+                + ", numPendingItems=" + pendingItems.size()
+                + ", numRequests=" + requestsByIndex.size()
+                + ", blockHeader=" + headerItemInfo
+                + ", blockPreProof=" + preProofItemInfo
+                + ", blockProof=" + proofItemInfo
+                + "}";
     }
 }
