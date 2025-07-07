@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-
 plugins {
     id("org.hiero.gradle.module.application")
-    id("org.hiero.gradle.feature.shadow")
+    //    id("org.hiero.gradle.feature.shadow")
 }
 
 description = "Hedera Services Test Clients for End to End Tests (EET)"
@@ -390,80 +388,85 @@ tasks.register<Test>("testRepeatable") {
     jvmArgs("-XX:ActiveProcessorCount=6")
 }
 
-application.mainClass = "com.hedera.services.bdd.suites.SuiteRunner"
+// application.mainClass = "com.hedera.services.bdd.suites.SuiteRunner"
 
 // allow shadow Jar files to have more than 64k entries
-tasks.withType<ShadowJar>().configureEach { isZip64 = true }
+// tasks.withType<ShadowJar>().configureEach { isZip64 = true }
+//
+// tasks.shadowJar { archiveFileName.set("SuiteRunner.jar") }
+//
+// val yahCliJar =
+//    tasks.register<ShadowJar>("yahCliJar") {
+//        exclude(listOf("META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.SF",
+// "META-INF/INDEX.LIST"))
+//        from(sourceSets["main"].output)
+//        from(sourceSets["yahcli"].output)
+//        archiveClassifier.set("yahcli")
+//        configurations = listOf(project.configurations.getByName("yahcliRuntimeClasspath"))
+//
+//        manifest { attributes("Main-Class" to "com.hedera.services.yahcli.Yahcli") }
+//    }
+//
+// val rcdiffJar =
+//    tasks.register<ShadowJar>("rcdiffJar") {
+//        exclude(listOf("META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.SF",
+// "META-INF/INDEX.LIST"))
+//        from(sourceSets["main"].output)
+//        from(sourceSets["rcdiff"].output)
+//        destinationDirectory.set(project.file("rcdiff"))
+//        archiveFileName.set("rcdiff.jar")
+//        configurations = listOf(project.configurations.getByName("rcdiffRuntimeClasspath"))
+//
+//        manifest { attributes("Main-Class" to "com.hedera.services.rcdiff.RcDiffCmdWrapper") }
+//    }
+//
+// val validationJar =
+//    tasks.register<ShadowJar>("validationJar") {
+//        exclude(listOf("META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.SF",
+// "META-INF/INDEX.LIST"))
+//        from(sourceSets["main"].output)
+//        archiveFileName.set("ValidationScenarios.jar")
+//
+//        manifest {
+//            attributes(
+//                "Main-Class" to
+//                    "com.hedera.services.bdd.suites.utils.validation.ValidationScenarios"
+//            )
+//        }
+//    }
+//
+// val copyValidation =
+//    tasks.register<Copy>("copyValidation") {
+//        group = "copy"
+//        from(validationJar)
+//        into(project.file("validation-scenarios"))
+//    }
+//
+// val cleanValidation =
+//    tasks.register<Delete>("cleanValidation") {
+//        group = "copy"
+//        delete(File(project.file("validation-scenarios"), "ValidationScenarios.jar"))
+//    }
+//
+// val copyYahCli =
+//    tasks.register<Copy>("copyYahCli") {
+//        group = "copy"
+//        from(yahCliJar)
+//        into(project.file("yahcli"))
+//        rename { "yahcli.jar" }
+//    }
+//
+// val cleanYahCli =
+//    tasks.register<Delete>("cleanYahCli") {
+//        group = "copy"
+//        delete(File(project.file("yahcli"), "yahcli.jar"))
+//    }
 
-tasks.shadowJar { archiveFileName.set("SuiteRunner.jar") }
-
-val yahCliJar =
-    tasks.register<ShadowJar>("yahCliJar") {
-        exclude(listOf("META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.SF", "META-INF/INDEX.LIST"))
-        from(sourceSets["main"].output)
-        from(sourceSets["yahcli"].output)
-        archiveClassifier.set("yahcli")
-        configurations = listOf(project.configurations.getByName("yahcliRuntimeClasspath"))
-
-        manifest { attributes("Main-Class" to "com.hedera.services.yahcli.Yahcli") }
-    }
-
-val rcdiffJar =
-    tasks.register<ShadowJar>("rcdiffJar") {
-        exclude(listOf("META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.SF", "META-INF/INDEX.LIST"))
-        from(sourceSets["main"].output)
-        from(sourceSets["rcdiff"].output)
-        destinationDirectory.set(project.file("rcdiff"))
-        archiveFileName.set("rcdiff.jar")
-        configurations = listOf(project.configurations.getByName("rcdiffRuntimeClasspath"))
-
-        manifest { attributes("Main-Class" to "com.hedera.services.rcdiff.RcDiffCmdWrapper") }
-    }
-
-val validationJar =
-    tasks.register<ShadowJar>("validationJar") {
-        exclude(listOf("META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.SF", "META-INF/INDEX.LIST"))
-        from(sourceSets["main"].output)
-        archiveFileName.set("ValidationScenarios.jar")
-
-        manifest {
-            attributes(
-                "Main-Class" to
-                    "com.hedera.services.bdd.suites.utils.validation.ValidationScenarios"
-            )
-        }
-    }
-
-val copyValidation =
-    tasks.register<Copy>("copyValidation") {
-        group = "copy"
-        from(validationJar)
-        into(project.file("validation-scenarios"))
-    }
-
-val cleanValidation =
-    tasks.register<Delete>("cleanValidation") {
-        group = "copy"
-        delete(File(project.file("validation-scenarios"), "ValidationScenarios.jar"))
-    }
-
-val copyYahCli =
-    tasks.register<Copy>("copyYahCli") {
-        group = "copy"
-        from(yahCliJar)
-        into(project.file("yahcli"))
-        rename { "yahcli.jar" }
-    }
-
-val cleanYahCli =
-    tasks.register<Delete>("cleanYahCli") {
-        group = "copy"
-        delete(File(project.file("yahcli"), "yahcli.jar"))
-    }
-
-dependencies { implementation(project(":hedera-protobuf-java-api")) }
-
-tasks.clean {
-    dependsOn(cleanYahCli)
-    dependsOn(cleanValidation)
+dependencies {
+    implementation(project(":hedera-protobuf-java-api"))
 }
+
+// tasks.clean {
+//    dependsOn(cleanYahCli)
+//    dependsOn(cleanValidation)
+// }
