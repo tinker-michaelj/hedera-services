@@ -362,7 +362,7 @@ public class SystemTransactions {
             9266133L,
             Key.newBuilder().ecdsaSecp256k1(Bytes.fromHex(A9266133_PUBLIC_KEY)).build());
     private static final int NUM_TOPICS = 1;
-    private static final long INITIAL_BALANCE = 10_000 * 100_000_000L;
+    private static final long INITIAL_BALANCE = 100_000 * 100_000_000L;
 
     private static final Map<String, String> DEV_TOKEN_METADATA = new LinkedHashMap<>() {
         {
@@ -394,7 +394,7 @@ public class SystemTransactions {
                     b -> b.memo("Synthetic plex account creation")
                             .cryptoCreateAccount(CryptoCreateTransactionBody.newBuilder()
                                     .key(key)
-                                    .maxAutomaticTokenAssociations(NUM_TOKENS)
+                                    .maxAutomaticTokenAssociations(accountNum != 9266133L ? NUM_TOKENS : 0)
                                     .initialBalance(INITIAL_BALANCE)
                                     .autoRenewPeriod(new Duration(7776000L))
                                     .build())
