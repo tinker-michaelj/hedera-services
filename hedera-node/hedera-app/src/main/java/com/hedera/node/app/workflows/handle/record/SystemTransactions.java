@@ -362,24 +362,24 @@ public class SystemTransactions {
             9266133L,
             Key.newBuilder().ecdsaSecp256k1(Bytes.fromHex(A9266133_PUBLIC_KEY)).build());
     private static final int NUM_TOPICS = 1;
-    private static final long INITIAL_BALANCE = 100_000 * 100_000_000L;
+    private static final long INITIAL_BALANCE = 100_000_000 * 100_000_000L;
 
     private static final Map<String, String> DEV_TOKEN_METADATA = new LinkedHashMap<>() {
         {
-            put("aaa", "Token A");
-            put("bbb", "Token B");
-            put("ccc", "Token C");
-            put("usdc", "USD Coin");
-            put("ddd", "Token D");
-            put("apy", "Aperture");
-            put("brx", "BridgeX");
-            put("eqd", "EquiDollar");
-            put("nx", "Nexis");
-            put("qbt", "Quantobit");
-            put("seed", "Sustenance DAO");
-            put("shd", "Shade");
-            put("vote", "Voluntary Engine");
-            put("wag", "We-All-GM");
+            put("BTC", "Bitcoin");
+            put("ETH", "Ethereum");
+            put("XRP", "XRP");
+            put("BNB", "Binance Coin");
+            put("SOL", "Solana");
+            put("USDC", "USDC");
+            put("DOGE", "Dogecoin");
+            put("TRX", "TRON");
+            put("ADA", "Cardano");
+            put("XLM", "Stellar");
+            put("HYPE", "Hyperliquid");
+            put("SUI", "Sui");
+            put("LINK", "Chainlink");
+            put("AVAX", "Avalanche");
         }
     };
     private static final int NUM_TOKENS = DEV_TOKEN_METADATA.size();
