@@ -26,16 +26,10 @@ import static org.hiero.consensus.roster.RosterUtils.formatNodeName;
 import com.goterl.lazysodium.utils.HexMessageEncoder;
 import com.hedera.hapi.node.addressbook.NodeCreateTransactionBody;
 import com.hedera.hapi.node.addressbook.NodeUpdateTransactionBody;
-import com.hedera.hapi.node.base.AccountID;
-import com.hedera.hapi.node.base.CurrentAndNextFeeSchedule;
-import com.hedera.hapi.node.base.Duration;
-import com.hedera.hapi.node.base.Key;
-import com.hedera.hapi.node.base.ResponseCodeEnum;
-import com.hedera.hapi.node.base.SemanticVersion;
-import com.hedera.hapi.node.base.ServiceEndpoint;
-import com.hedera.hapi.node.base.TransactionID;
+import com.hedera.hapi.node.base.*;
 import com.hedera.hapi.node.consensus.ConsensusCreateTopicTransactionBody;
 import com.hedera.hapi.node.contract.ContractCreateTransactionBody;
+import com.hedera.hapi.node.file.FileCreateTransactionBody;
 import com.hedera.hapi.node.state.common.EntityNumber;
 import com.hedera.hapi.node.state.roster.RosterEntry;
 import com.hedera.hapi.node.state.token.StakingNodeInfo;
@@ -85,6 +79,7 @@ import com.swirlds.state.lifecycle.EntityIdFactory;
 import com.swirlds.state.lifecycle.info.NetworkInfo;
 import com.swirlds.state.lifecycle.info.NodeInfo;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -327,6 +322,8 @@ public class SystemTransactions {
         setupPlexTokens(systemContext);
         setupPlexTopics(systemContext);
         setupPlexFeeCollector(systemContext);
+        setupSimpleErc20Initcode(systemContext);
+        setupErc20Tokens(systemContext);
     }
 
     private static final long FIRST_TOKEN_NUM = 20000L;
@@ -345,6 +342,7 @@ public class SystemTransactions {
     private static final String A9266133_PUBLIC_KEY =
             "03ac69bc0610b41fee3b8f66961138e8955685a723ef08d4b1d57a179548ed0cc8";
     private static final long MASTER_ID = 4589187L;
+    private static final long SIMPLE_ERC20_INITCODE_ID = 1243L;
     private static final long FEE_COLLECTOR_ID = 1234567L;
     private static final Key MASTER_KEY =
             Key.newBuilder().ed25519(Bytes.fromHex(A4589187_PUBLIC_KEY)).build();
@@ -382,6 +380,12 @@ public class SystemTransactions {
             put("AVAX", "Avalanche");
         }
     };
+    private static final Map<String, Map<String, Long>> DEV_ERC20_METADATA = new LinkedHashMap<>() {
+        {
+            put("WBTC", Map.of("Wrapped Bitcoin", 111111L));
+            put("WETH", Map.of("Wrapped Ethereum", 222222L));
+        }
+    };
     private static final int NUM_TOKENS = DEV_TOKEN_METADATA.size();
 
     private static final SplittableRandom RANDOM = new SplittableRandom(1_234_567L);
@@ -405,6 +409,7 @@ public class SystemTransactions {
 
     private static final String FEE_COLLECTOR_INITCODE_LOC =
             "/Users/michaeltinker/dev/llabs/lambdaplex/contracts/build/LambdaplexFeeCollector.bin";
+    private static final String ERC20_CONTRACT = "SimpleERC20";
 
     private void setupPlexFeeCollector(SystemContext systemContext) {
         final byte[] initcode;
@@ -430,6 +435,50 @@ public class SystemTransactions {
         }
     }
 
+    private void setupSimpleErc20Initcode(SystemContext systemContext) {
+        final byte[] initcode;
+        try {
+            final var slash = FEE_COLLECTOR_INITCODE_LOC.lastIndexOf("/");
+            final var loc = FEE_COLLECTOR_INITCODE_LOC.substring(0, slash) + File.separator + ERC20_CONTRACT + ".bin";
+            initcode = Files.readAllBytes(Paths.get(loc));
+            final var op = FileCreateTransactionBody.newBuilder()
+                    .contents(Bytes.wrap(initcode))
+                    .build();
+            systemContext.dispatchCreation(
+                    b -> b.memo("Simple ERC-20 initcode creation")
+                            .transactionID(TransactionID.newBuilder()
+                                    .accountID(AccountID.newBuilder().accountNum(MASTER_ID))
+                                    .build())
+                            .fileCreate(op)
+                            .build(),
+                    SIMPLE_ERC20_INITCODE_ID);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static final String CONSTRUCTOR_ABI =
+            "{\"inputs\":[{\"internalType\":\"string\",\"name\":\"name_\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"symbol_\",\"type\":\"string\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}";
+
+    private void setupErc20(SystemContext systemContext, String name, String symbol, long contractId) {
+        final var f = com.esaulpaugh.headlong.abi.Function.fromJson(CONSTRUCTOR_ABI);
+        final var encodedCall = f.encodeCallWithArgs(name, symbol).array();
+        final var op = ContractCreateTransactionBody.newBuilder()
+                .fileID(FileID.newBuilder().fileNum(SIMPLE_ERC20_INITCODE_ID))
+                .constructorParameters(Bytes.wrap(Arrays.copyOfRange(encodedCall, 4, encodedCall.length)))
+                .autoRenewPeriod(new Duration(7776000L))
+                .gas(4_000_000)
+                .build();
+        systemContext.dispatchCreation(
+                b -> b.memo("Synth ERC-20 " + symbol + " creation")
+                        .transactionID(TransactionID.newBuilder()
+                                .accountID(AccountID.newBuilder().accountNum(MASTER_ID))
+                                .build())
+                        .contractCreateInstance(op)
+                        .build(),
+                contractId);
+    }
+
     private void setupPlexTokens(SystemContext systemContext) {
         final var tokenTreasuryId = AccountID.newBuilder().accountNum(MASTER_ID).build();
         final var number = new AtomicLong(FIRST_TOKEN_NUM);
@@ -450,6 +499,13 @@ public class SystemTransactions {
                             .tokenCreation(op)
                             .build(),
                     n);
+        });
+    }
+
+    private void setupErc20Tokens(SystemContext systemContext) {
+        DEV_ERC20_METADATA.forEach((s, meta) -> {
+            final var entry = meta.entrySet().iterator().next();
+            setupErc20(systemContext, entry.getKey(), s, entry.getValue());
         });
     }
 
