@@ -203,54 +203,58 @@ public class CryptoTransferHandler extends TransferExecutor implements Transacti
 
         executeCryptoTransfer(txn, transferContext, context, recordBuilder);
         // <PLEX>
-        if (recordBuilder.status() == OK && txn.memo().startsWith("Via")) {
-            System.out.println("\n---Trade '" + txn.memo() + "' completed---");
-            final Map<Long, Map<String, List<Pair<Long, Long>>>> trade = new HashMap<>();
-            for (final var hbarAdjust : op.transfersOrElse(TransferList.DEFAULT).accountAmounts()) {
-                final var num = hbarAdjust.accountIDOrThrow().accountNumOrThrow();
-                if (hbarAdjust.amount() > 0) {
-                    trade.computeIfAbsent(num, ignore -> new HashMap<>())
-                            .computeIfAbsent("CREDITS", k -> new ArrayList<>())
-                            .add(new Pair<>(hbarAdjust.amount(), 0L));
-                } else {
-                    trade.computeIfAbsent(num, ignore -> new HashMap<>())
-                            .computeIfAbsent("DEBITS", k -> new ArrayList<>())
-                            .add(new Pair<>(-hbarAdjust.amount(), 0L));
-                }
-            }
-            for (final var tokenTransfers : op.tokenTransfers()) {
-                final var tokenNum = tokenTransfers.tokenOrThrow().tokenNum();
-                for (final var tokenAdjust : tokenTransfers.transfers()) {
-                    final var num = tokenAdjust.accountIDOrThrow().accountNumOrThrow();
-                    if (tokenAdjust.amount() > 0) {
+        if (recordBuilder.status() == OK) {
+            if (txn.memo().startsWith("Via")) {
+                System.out.println("\n---Trade '" + txn.memo() + "' completed---");
+                final Map<Long, Map<String, List<Pair<Long, Long>>>> trade = new HashMap<>();
+                for (final var hbarAdjust : op.transfersOrElse(TransferList.DEFAULT).accountAmounts()) {
+                    final var num = hbarAdjust.accountIDOrThrow().accountNumOrThrow();
+                    if (hbarAdjust.amount() > 0) {
                         trade.computeIfAbsent(num, ignore -> new HashMap<>())
                                 .computeIfAbsent("CREDITS", k -> new ArrayList<>())
-                                .add(new Pair<>(tokenAdjust.amount(), tokenNum));
+                                .add(new Pair<>(hbarAdjust.amount(), 0L));
                     } else {
                         trade.computeIfAbsent(num, ignore -> new HashMap<>())
                                 .computeIfAbsent("DEBITS", k -> new ArrayList<>())
-                                .add(new Pair<>(-tokenAdjust.amount(), tokenNum));
+                                .add(new Pair<>(-hbarAdjust.amount(), 0L));
                     }
                 }
+                for (final var tokenTransfers : op.tokenTransfers()) {
+                    final var tokenNum = tokenTransfers.tokenOrThrow().tokenNum();
+                    for (final var tokenAdjust : tokenTransfers.transfers()) {
+                        final var num = tokenAdjust.accountIDOrThrow().accountNumOrThrow();
+                        if (tokenAdjust.amount() > 0) {
+                            trade.computeIfAbsent(num, ignore -> new HashMap<>())
+                                    .computeIfAbsent("CREDITS", k -> new ArrayList<>())
+                                    .add(new Pair<>(tokenAdjust.amount(), tokenNum));
+                        } else {
+                            trade.computeIfAbsent(num, ignore -> new HashMap<>())
+                                    .computeIfAbsent("DEBITS", k -> new ArrayList<>())
+                                    .add(new Pair<>(-tokenAdjust.amount(), tokenNum));
+                        }
+                    }
+                }
+                trade.forEach((num, results) -> {
+                    System.out.println(" - 0.0." + num);
+                    System.out.println("    -> GETS : "
+                            + (results.containsKey("CREDITS")
+                            ? results.get("CREDITS").stream()
+                            .map(p ->
+                                    p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value()))
+                            .collect(joining(", "))
+                            : "Nothing"));
+                    System.out.println("    -> PAYS : "
+                            + (results.containsKey("DEBITS")
+                            ? results.get("DEBITS").stream()
+                            .map(p ->
+                                    p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value()))
+                            .collect(joining(","))
+                            : "Nothing"));
+                });
+                System.out.println("------------------------------------------\n");
+            } else if (txn.memo().startsWith("(NATIVE leg)")) {
+                System.out.println("---Trade leg '" + txn.memo() + "' completed---");
             }
-            trade.forEach((num, results) -> {
-                System.out.println(" - 0.0." + num);
-                System.out.println("    -> GETS : "
-                        + (results.containsKey("CREDITS")
-                                ? results.get("CREDITS").stream()
-                                        .map(p ->
-                                                p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value()))
-                                        .collect(joining(", "))
-                                : "Nothing"));
-                System.out.println("    -> PAYS : "
-                        + (results.containsKey("DEBITS")
-                                ? results.get("DEBITS").stream()
-                                        .map(p ->
-                                                p.key() + " " + (p.value() == 0 ? "HBAR" : "units of 0.0." + p.value()))
-                                        .collect(joining(","))
-                                : "Nothing"));
-            });
-            System.out.println("------------------------------------------\n");
         }
         // </PLEX>
     }

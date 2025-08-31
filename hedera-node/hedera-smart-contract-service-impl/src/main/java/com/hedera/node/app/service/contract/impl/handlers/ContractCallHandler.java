@@ -2,8 +2,7 @@
 package com.hedera.node.app.service.contract.impl.handlers;
 
 import static com.hedera.hapi.node.base.HederaFunctionality.CONTRACT_CALL;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INSUFFICIENT_GAS;
-import static com.hedera.hapi.node.base.ResponseCodeEnum.INVALID_CONTRACT_ID;
+import static com.hedera.hapi.node.base.ResponseCodeEnum.*;
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.EVM_ADDRESS_LENGTH_AS_INT;
 import static com.hedera.node.app.service.contract.impl.utils.ConversionUtils.throwIfUnsuccessfulCall;
 import static com.hedera.node.app.spi.validation.Validations.mustExist;
@@ -59,6 +58,12 @@ public class ContractCallHandler extends AbstractContractTransactionHandler {
         // Assemble the appropriate top-level record for the result
         final var streamBuilder = context.savepointStack().getBaseBuilder(ContractCallStreamBuilder.class);
         outcome.addCallDetailsTo(streamBuilder);
+        if (streamBuilder.status() == OK) {
+            final var txn = context.body();
+            if (txn.memo().startsWith("(ERC20 leg)")) {
+                System.out.println("---Trade leg '" + txn.memo() + "' completed---");
+            }
+        }
 
         throwIfUnsuccessfulCall(outcome, component.hederaOperations(), streamBuilder);
     }
