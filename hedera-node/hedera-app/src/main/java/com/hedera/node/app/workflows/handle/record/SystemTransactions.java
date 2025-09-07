@@ -83,6 +83,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -362,6 +363,12 @@ public class SystemTransactions {
     private static final int NUM_TOPICS = 1;
     private static final long INITIAL_BALANCE = 100_000_000 * 100_000_000L;
 
+    private static final String PLEX_SYMBOL = "PLEX";
+    private static final String PLEX_NAME = "Lambdaplex";
+    private static final long PLEX_NUMBER = 666666L;
+    private static final int PLEX_DECIMALS = 6;
+    private static final long PLEX_SUPPLY = BigInteger.valueOf(1_000_000_000L).multiply(BigInteger.TEN.pow(PLEX_DECIMALS)).longValueExact();
+
     private static final Map<String, String> DEV_TOKEN_METADATA = new LinkedHashMap<>() {
         {
             put("BTC", "Bitcoin");
@@ -398,7 +405,7 @@ public class SystemTransactions {
                     b -> b.memo("Synthetic plex account creation")
                             .cryptoCreateAccount(CryptoCreateTransactionBody.newBuilder()
                                     .key(key)
-                                    .maxAutomaticTokenAssociations(accountNum != 9266133L ? NUM_TOKENS : 0)
+                                    .maxAutomaticTokenAssociations(accountNum != 9266133L ? (NUM_TOKENS + 1) : 0)
                                     .initialBalance(INITIAL_BALANCE)
                                     .autoRenewPeriod(new Duration(7776000L))
                                     .build())
@@ -500,6 +507,20 @@ public class SystemTransactions {
                             .build(),
                     n);
         });
+        final var op = TokenCreateTransactionBody.newBuilder()
+                .supplyKey(MASTER_KEY)
+                .tokenType(FUNGIBLE_COMMON)
+                .decimals(PLEX_DECIMALS)
+                .symbol(PLEX_SYMBOL)
+                .name(PLEX_NAME)
+                .initialSupply(PLEX_SUPPLY)
+                .treasury(tokenTreasuryId)
+                .build();
+        systemContext.dispatchCreation(
+                b -> b.memo("Synthetic PLEX token creation")
+                        .tokenCreation(op)
+                        .build(),
+                PLEX_NUMBER);
     }
 
     private void setupErc20Tokens(SystemContext systemContext) {
