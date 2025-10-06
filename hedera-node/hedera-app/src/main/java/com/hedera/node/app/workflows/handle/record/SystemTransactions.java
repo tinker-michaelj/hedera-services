@@ -412,6 +412,19 @@ public class SystemTransactions {
                             .build(),
                     accountNum);
         }
+
+        for (final long num : List.of(9999L, 99999L, 999999L)) {
+            systemContext.dispatchCreation(
+                    b -> b.memo("User bot account")
+                            .cryptoCreateAccount(CryptoCreateTransactionBody.newBuilder()
+                                    .key(WELL_KNOWN_KEYS.get(4589188L))
+                                    .maxAutomaticTokenAssociations(111)
+                                    .initialBalance(INITIAL_BALANCE)
+                                    .autoRenewPeriod(new Duration(7776000L))
+                                    .build())
+                            .build(),
+                    num);
+        }
     }
 
     private static final String FEE_COLLECTOR_INITCODE_LOC =
