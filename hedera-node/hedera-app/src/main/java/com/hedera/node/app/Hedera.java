@@ -25,6 +25,7 @@ import static org.hiero.consensus.model.status.PlatformStatus.ACTIVE;
 import static org.hiero.consensus.model.status.PlatformStatus.STARTING_UP;
 
 import com.hedera.hapi.block.stream.output.StateChanges;
+import com.hedera.hapi.node.base.AccountID;
 import com.hedera.hapi.node.base.Duration;
 import com.hedera.hapi.node.base.HederaFunctionality;
 import com.hedera.hapi.node.base.SemanticVersion;
@@ -38,6 +39,7 @@ import com.hedera.hapi.node.transaction.ThrottleDefinitions;
 import com.hedera.hapi.node.transaction.TransactionBody;
 import com.hedera.hapi.platform.event.StateSignatureTransaction;
 import com.hedera.hapi.platform.state.PlatformState;
+import com.hedera.hapi.services.auxiliary.hints.HintsKeyPublicationTransactionBody;
 import com.hedera.hapi.util.HapiUtils;
 import com.hedera.hapi.util.UnknownHederaFunctionality;
 import com.hedera.node.app.blocks.BlockHashSigner;
@@ -117,6 +119,7 @@ import com.swirlds.platform.listeners.StateWriteToDiskCompleteListener;
 import com.swirlds.platform.state.ConsensusStateEventHandler;
 import com.swirlds.platform.state.service.PlatformStateFacade;
 import com.swirlds.platform.state.service.PlatformStateService;
+import com.swirlds.platform.state.service.ReadablePlatformStateStore;
 import com.swirlds.platform.system.InitTrigger;
 import com.swirlds.platform.system.Platform;
 import com.swirlds.platform.system.SwirldMain;
@@ -134,6 +137,7 @@ import edu.umd.cs.findbugs.annotations.Nullable;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.List;
@@ -141,6 +145,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
@@ -786,6 +793,23 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, AppContext.Gos
                 System.exit(1);
             }
         }
+        Executors.newSingleThreadScheduledExecutor()
+                .scheduleAtFixedRate(
+                        () -> {
+                            this.submitFuture(
+                                    AccountID.newBuilder().accountNum(3L).build(),
+                                    Instant.now(),
+                                    java.time.Duration.ofSeconds(180),
+                                    b -> b.hintsKeyPublication(HintsKeyPublicationTransactionBody.DEFAULT),
+                                    ForkJoinPool.commonPool(),
+                                    2,
+                                    1,
+                                    java.time.Duration.ofSeconds(2),
+                                    (body, msg) -> logger.info("Will need to retry"));
+                        },
+                        8,
+                        8,
+                        TimeUnit.SECONDS);
     }
 
     /**
@@ -1005,6 +1029,20 @@ public final class Hedera implements SwirldMain<MerkleNodeState>, AppContext.Gos
         // Will be null if the submitting node is no longer in the address book
         final var creatorInfo =
                 daggerApp.networkInfo().nodeInfo(event.getCreatorId().id());
+        if (creatorInfo == null) {
+            // It's normal immediately post-upgrade to still see events from a node removed from the address book
+            final var platformStateStore = readableStoreFactory.getStore(ReadablePlatformStateStore.class);
+            if (event.getEventCore().birthRound() > platformStateStore.getLatestFreezeRound()) {
+                logger.warn(
+                        "Received event with birth round {}, last freeze round is {}, from node {} "
+                                + "which is not in the address book",
+                        event.getEventCore().birthRound(),
+                        platformStateStore.getLatestFreezeRound(),
+                        event.getCreatorId());
+            }
+            return;
+        }
+
         final BiConsumer<StateSignatureTransaction, Bytes> shortCircuitTxnCallback = (txn, ignored) -> {
             final var scopedTxn = new ScopedSystemTransaction<>(event.getCreatorId(), event.getBirthRound(), txn);
             stateSignatureTxnCallback.accept(scopedTxn);

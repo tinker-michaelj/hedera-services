@@ -55,6 +55,7 @@ module com.hedera.node.app {
     requires org.hiero.base.concurrent;
     requires com.github.benmanes.caffeine;
     requires com.google.common;
+    requires com.goterl.lazysodium;
     requires io.grpc.netty;
     requires io.helidon.common.tls;
     requires io.helidon.webclient.grpc;

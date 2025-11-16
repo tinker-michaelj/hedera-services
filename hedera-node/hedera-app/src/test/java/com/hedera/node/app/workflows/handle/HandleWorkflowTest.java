@@ -497,8 +497,7 @@ class HandleWorkflowTest {
                 nodeRewardManager,
                 platformStateFacade,
                 blockBufferService,
-                Map.of(),
-                quiescenceController);
+                Map.of());
     }
 
     @Test
