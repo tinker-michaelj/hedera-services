@@ -90,6 +90,7 @@ import com.swirlds.state.State;
 import com.swirlds.state.spi.CommittableWritableStates;
 import com.swirlds.state.spi.WritableSingletonState;
 import edu.umd.cs.findbugs.annotations.NonNull;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -107,6 +108,7 @@ import java.util.function.Function;
 import java.util.stream.LongStream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hiero.consensus.roster.ReadableRosterStore;
@@ -132,7 +134,8 @@ public class SystemTransactions {
 
     private static final EnumSet<ResponseCodeEnum> SUCCESSES =
             EnumSet.of(SUCCESS, SUCCESS_BUT_MISSING_EXPECTED_OPERATION);
-    private static final Consumer<Dispatch> DEFAULT_DISPATCH_ON_SUCCESS = dispatch -> {};
+    private static final Consumer<Dispatch> DEFAULT_DISPATCH_ON_SUCCESS = dispatch -> {
+    };
 
     private final InitTrigger initTrigger;
     private final BlocklistParser blocklistParser = new BlocklistParser();
@@ -373,16 +376,66 @@ public class SystemTransactions {
         setupPlexFeeCollector(systemContext);
         setupSimpleErc20Initcode(systemContext);
         setupErc20Tokens(systemContext);
+        setupHookContract(systemContext);
+        setupHookContractInitCode(systemContext);
+    }
+
+    private void setupHookContractInitCode(final SystemContext systemContext) {
+        final byte[] initcode;
+        try {
+            final var slash = ORDER_FLOW_ALLOWANCE_INITCODE_LOC.lastIndexOf("/");
+            final var loc = ORDER_FLOW_ALLOWANCE_INITCODE_LOC.substring(0, slash) + File.separator + ORDER_FLOW_ALLOWANCE_CONTRACT + ".bin";
+            initcode = Files.readAllBytes(Paths.get(loc));
+            final var op = FileCreateTransactionBody.newBuilder()
+                    .contents(Bytes.wrap(initcode))
+                    .build();
+            systemContext.dispatchCreation(
+                    b -> b.memo("Order flow allowance initcode creation")
+                            .transactionID(TransactionID.newBuilder()
+                                    .accountID(AccountID.newBuilder().accountNum(MASTER_ID))
+                                    .build())
+                            .fileCreate(op)
+                            .build(),
+                    ORDER_FLOW_ALLOWANCE_INITCODE_ID);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private void setupHookContract(final SystemContext systemContext) {
+        final byte[] initcode;
+        try {
+            initcode = Files.readAllBytes(Paths.get(ORDER_FLOW_ALLOWANCE_INITCODE_LOC));
+            final var encoder = new HexMessageEncoder();
+            final var unhexedBytecode = encoder.decode(new String(initcode));
+            final var op = ContractCreateTransactionBody.newBuilder()
+                    .initcode(Bytes.wrap(unhexedBytecode))
+                    .autoRenewPeriod(new Duration(7776000L))
+                    .gas(4_000_000)
+                    .build();
+            systemContext.dispatchCreation(
+                    b -> b.memo("Synthetic plex hook contract creation")
+                            .transactionID(TransactionID.newBuilder()
+                                    .accountID(AccountID.newBuilder().accountNum(MASTER_ID))
+                                    .build())
+                            .contractCreateInstance(op)
+                            .build(),
+                    HOOK_CONTRACT_NUM);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /**
      * Sets up post-upgrade state for the system.
+     *
      * @param now the current time
      * @param state the state to set up
      */
     public void doPostUpgradeSetup(@NonNull final Instant now, @NonNull final State state) {
         final var systemContext = newSystemContext(
-                now, state, dispatch -> {}, UseReservedConsensusTimes.YES, TriggerStakePeriodSideEffects.YES);
+                now, state, dispatch -> {
+                }, UseReservedConsensusTimes.YES, TriggerStakePeriodSideEffects.YES);
         final var config = configProvider.getConfiguration();
 
         // We update the node details file from the address book that resulted from all pre-upgrade HAPI node changes
@@ -466,7 +519,8 @@ public class SystemTransactions {
         requireNonNull(activeNodeIds);
         requireNonNull(nodeRewardsAccountId);
         final var systemContext = newSystemContext(
-                now, state, dispatch -> {}, UseReservedConsensusTimes.NO, TriggerStakePeriodSideEffects.YES);
+                now, state, dispatch -> {
+                }, UseReservedConsensusTimes.NO, TriggerStakePeriodSideEffects.YES);
         final var activeNodeAccountIds = activeNodeIds.stream()
                 .map(id -> systemContext.networkInfo().nodeInfo(id))
                 .filter(nodeInfo -> nodeInfo != null && !nodeInfo.declineReward())
@@ -529,7 +583,8 @@ public class SystemTransactions {
         final var rosterStore = readableStoreFactory.getStore(ReadableRosterStore.class);
         final var nodeStore = readableStoreFactory.getStore(ReadableNodeStore.class);
         final var systemContext = newSystemContext(
-                now, state, dispatch -> {}, UseReservedConsensusTimes.YES, TriggerStakePeriodSideEffects.YES);
+                now, state, dispatch -> {
+                }, UseReservedConsensusTimes.YES, TriggerStakePeriodSideEffects.YES);
         final var network = startupNetworks.overrideNetworkFor(currentRoundNum - 1, configProvider.getConfiguration());
         if (rosterStore.isTransplantInProgress() && network.isPresent()) {
             log.info("Roster transplant in progress, dispatching node updates for round {}", currentRoundNum - 1);
@@ -706,7 +761,7 @@ public class SystemTransactions {
         final var remainingDispatches = new AtomicInteger(
                 useReserved
                         ? (int) java.time.Duration.between(firstConsTime, now).toNanos()
-                                / (applyStakePeriodSideEffects ? 2 : 1)
+                        / (applyStakePeriodSideEffects ? 2 : 1)
                         : 1);
         final AtomicReference<Instant> nextConsTime = new AtomicReference<>(firstConsTime);
         final var systemAdminId = idFactory.newAccountId(
@@ -948,6 +1003,7 @@ public class SystemTransactions {
 
     private static final long FIRST_TOKEN_NUM = 20000L;
     private static final long FIRST_TOPIC_NUM = 30000L;
+    private static final long HOOK_CONTRACT_NUM = 40000L;
 
     private static final String A4589187_PUBLIC_KEY =
             "ac228a873619e041648113a84f12079b8af8522073adc343e1a91594f0b1c05d";
@@ -963,6 +1019,7 @@ public class SystemTransactions {
             "03ac69bc0610b41fee3b8f66961138e8955685a723ef08d4b1d57a179548ed0cc8";
     private static final long MASTER_ID = 4589187L;
     private static final long SIMPLE_ERC20_INITCODE_ID = 1243L;
+    private static final long ORDER_FLOW_ALLOWANCE_INITCODE_ID = 1245L;
     private static final long FEE_COLLECTOR_ID = 1234567L;
     private static final Key MASTER_KEY =
             Key.newBuilder().ed25519(Bytes.fromHex(A4589187_PUBLIC_KEY)).build();
@@ -1028,6 +1085,7 @@ public class SystemTransactions {
                                     .key(key)
                                     .maxAutomaticTokenAssociations(accountNum != 9266133L ? (NUM_TOKENS + 1) : 0)
                                     .initialBalance(INITIAL_BALANCE)
+                                    .hookCreationDetails()
                                     .autoRenewPeriod(new Duration(7776000L))
                                     .build())
                             .build(),
@@ -1050,7 +1108,10 @@ public class SystemTransactions {
 
     private static final String FEE_COLLECTOR_INITCODE_LOC =
             "/Users/neeharikasompalli/Documents/PersonalRepos/lambdaplex/contracts/build/LambdaplexFeeCollector.bin";
+    private static final String ORDER_FLOW_ALLOWANCE_INITCODE_LOC =
+            "/Users/neeharikasompalli/Documents/PersonalRepos/lambdaplex/contracts/OrderFlowAllowance/OrderFlowAllowance.bin";
     private static final String ERC20_CONTRACT = "SimpleERC20";
+    private static final String ORDER_FLOW_ALLOWANCE_CONTRACT = "OrderFlowAllowance";
 
     private void setupPlexFeeCollector(SystemContext systemContext) {
         final byte[] initcode;
