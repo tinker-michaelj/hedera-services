@@ -5,6 +5,7 @@ import static com.hedera.hapi.node.base.HederaFunctionality.NODE_CREATE;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS;
 import static com.hedera.hapi.node.base.ResponseCodeEnum.SUCCESS_BUT_MISSING_EXPECTED_OPERATION;
 import static com.hedera.hapi.node.base.TokenType.FUNGIBLE_COMMON;
+import static com.hedera.hapi.node.hooks.HookExtensionPoint.ACCOUNT_ALLOWANCE_HOOK;
 import static com.hedera.hapi.util.HapiUtils.asTimestamp;
 import static com.hedera.node.app.hapi.utils.keys.KeyUtils.IMMUTABILITY_SENTINEL_KEY;
 import static com.hedera.node.app.service.addressbook.impl.schemas.V053AddressBookSchema.parseEd25519NodeAdminKeysFrom;
@@ -32,6 +33,9 @@ import com.hedera.hapi.node.base.*;
 import com.hedera.hapi.node.consensus.ConsensusCreateTopicTransactionBody;
 import com.hedera.hapi.node.contract.ContractCreateTransactionBody;
 import com.hedera.hapi.node.file.FileCreateTransactionBody;
+import com.hedera.hapi.node.hooks.EvmHookSpec;
+import com.hedera.hapi.node.hooks.HookCreationDetails;
+import com.hedera.hapi.node.hooks.LambdaEvmHook;
 import com.hedera.hapi.node.state.common.EntityNumber;
 import com.hedera.hapi.node.state.entity.EntityCounts;
 import com.hedera.hapi.node.state.roster.RosterEntry;
@@ -1085,7 +1089,6 @@ public class SystemTransactions {
                                     .key(key)
                                     .maxAutomaticTokenAssociations(accountNum != 9266133L ? (NUM_TOKENS + 1) : 0)
                                     .initialBalance(INITIAL_BALANCE)
-                                    .hookCreationDetails()
                                     .autoRenewPeriod(new Duration(7776000L))
                                     .build())
                             .build(),
